@@ -1,0 +1,21 @@
+{
+  "name": "@sparrowjs/flight",
+  "version": "0.0.1-m0",
+  "description": "Arrow Flight. In the browser. Finally. — gRPC-web + Apache Arrow JS client for any Flight SQL server",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "gen": "buf generate",
+    "m0": "node src/m0.mjs"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.2.0",
+    "@connectrpc/connect": "^2.0.0",
+    "@connectrpc/connect-web": "^2.0.0",
+    "apache-arrow": "^18.1.0"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.47.0",
+    "@bufbuild/protoc-gen-es": "^2.2.0"
+  }
+}
