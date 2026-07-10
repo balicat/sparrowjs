@@ -16,9 +16,14 @@ import {
   CommandGetSqlInfoSchema,
 } from "./gen/FlightSql_pb.js";
 
-const ENDPOINT = process.env.SPARROW_ENDPOINT ?? "http://192.168.132.91:8890";
-const USER = process.env.SPARROW_USER ?? "gizmosql_username";
-const PASS = process.env.SPARROW_PASS ?? "gizmosql_password";
+const ENDPOINT = process.env.SPARROW_ENDPOINT;
+const USER = process.env.SPARROW_USER ?? "";
+const PASS = process.env.SPARROW_PASS ?? "";
+if (!ENDPOINT) {
+  console.error("usage: SPARROW_ENDPOINT=http://host:8890 [SPARROW_USER=u SPARROW_PASS=p] node src/m0.mjs \"SELECT 42\"");
+  console.error("       (endpoint = a gRPC-web edge in front of your Flight SQL server)");
+  process.exit(1);
+}
 const QUERY =
   process.argv[2] ?? "SELECT range AS n, range * 1.5 AS v FROM range(5)";
 

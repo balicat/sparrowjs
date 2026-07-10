@@ -1,7 +1,7 @@
 {
   "name": "@sparrowjs/flight",
   "version": "0.0.1-m0",
-  "description": "Arrow Flight. In the browser. Finally. — gRPC-web + Apache Arrow JS client for any Flight SQL server",
+  "description": "Arrow Flight. In the browser. Finally. \u2014 gRPC-web + Apache Arrow JS client for any Flight SQL server",
   "type": "module",
   "private": true,
   "scripts": {
@@ -18,5 +18,11 @@
     "@bufbuild/buf": "^1.47.0",
     "@bufbuild/protoc-gen-es": "^2.2.0",
     "esbuild": "^0.28.1"
-  }
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/balicat/sparrowjs.git"
+  },
+  "homepage": "https://sparrowflight.io/js"
 }
