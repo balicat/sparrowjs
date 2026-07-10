@@ -1,6 +1,7 @@
 # @sparrowjs/flight
 
-**The missing browser client for Apache Arrow Flight.**
+**The missing browser client for Apache Arrow Flight** — a browser implementation of
+Flight over gRPC-web, tied to no particular server.
 
 > **Status: M0.** Works today — it powers the [live demo at sparrowflight.io](https://sparrowflight.io/demo/js).
 > The API is not yet stable and the package is not yet on npm. Honest scope below.
@@ -24,6 +25,23 @@ zero copies, no REST gateway rewriting your data as text.
 It is not tied to any particular server. The same auth + discovery pattern has been
 validated against **GizmoSQL (DuckDB)**, **InfluxDB 3 Core**, **Dremio OSS**, and the
 EnergyScope production server ([Sparrow](https://sparrowflight.io)).
+
+## The landscape (as of July 2026)
+
+Good JavaScript Flight SQL clients exist — for **Node**. They ride
+`@grpc/grpc-js`, native gRPC, which browsers cannot speak:
+
+| | Browser | Node | Transport | Flight SQL |
+|---|---|---|---|---|
+| `apache-arrow` (JS) | ✅ | ✅ | — (IPC decode only; no Flight transport) | ❌ |
+| `gizmodata/gizmosql-client-js` | ❌ | ✅ (≥20) | native gRPC | ✅ |
+| `lancedb/flight-sql-js-client` | ❌ *("currently all testing is done on Node")* | ✅ | native gRPC | ✅ (experimental) |
+| **`@sparrowjs/flight`** | **✅** | ✅ | **gRPC-web** | ✅ |
+
+In the browser, the standard answer is still a REST/JSON backend in front of Flight.
+sparrowJS implements the transport stack browsers lack — connect-web → gRPC-web →
+Flight RPC → Flight SQL → Arrow IPC → typed arrays — so the page talks to the Flight
+server itself.
 
 ## The API, as intended
 
