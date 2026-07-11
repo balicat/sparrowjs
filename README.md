@@ -67,9 +67,10 @@ for await (const batch of stream) {
 // raw Flight against any server: client.getFlightInfo(desc) → client.doGet(ticket)
 ```
 
-What runs today is the M0 factory (`src/demo-entry.js`) — a `createSparrowClient()`
-that speaks Flight SQL (`CommandStatementQuery` → `GetFlightInfo` → `DoGet`) and returns
-a decoded Arrow table plus wire timings. The `FlightClient` API above is the M1 target.
+What runs today is the demo factory (`src/demo-entry.js`) — a `createSparrowClient()`
+that speaks Flight SQL (`CommandStatementQuery` → `GetFlightInfo` → `DoGet`), streams
+record batches as they arrive (`onBatch` callback), and returns the assembled Arrow
+table plus wire timings. The `FlightClient` API above is the packaging target.
 
 ## How it works
 
@@ -84,6 +85,27 @@ a decoded Arrow table plus wire timings. The `FlightClient` API above is the M1 
   (GizmoSQL-style) mint a Bearer from your Basic credentials and bind the session to
   it, so the client adopts the token from the response headers — the same silent trick
   the ADBC drivers do.
+
+## The numbers (and the honest part)
+
+We also built the control experiment: the same 136M-row snapshot behind a
+conventional REST+JSON API, raced button-against-button
+[on the live demo](https://sparrowflight.io/demo/js). Measured July 2026:
+
+| query | Arrow Flight | REST+JSON | winner |
+|---|---|---|---|
+| 1 series · 10,217 rows | 345 ms · 201 KB | **240 ms** · 56 KB gz | REST — one round trip beats Flight's two |
+| 10 series · 71,979 rows | **588 ms** · 1.7 MB | 850 ms · 4.8 MB JSON | Arrow — the backend's JSON factory becomes the bottleneck |
+
+Small queries favour REST; the gap flips and grows with payload because the server
+stops spending CPU manufacturing JSON. Under load the difference is structural —
+16 concurrent clients on the same 2-vCPU box: **Arrow 13.8 req/s (p95 1.4 s) vs
+REST 3.1 req/s (p95 8.4 s)**. Full write-up on
+[sparrowflight.io/js](https://sparrowflight.io/js).
+
+Streaming is real, not aspirational: the client decodes record batches as they
+arrive (`onBatch` callback) — the demo's ten-chart wall fills progressively while
+the stream flows.
 
 ## Run it from source
 
