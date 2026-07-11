@@ -3,7 +3,7 @@ import { createClient } from "@connectrpc/connect";
 import { createGrpcWebTransport } from "@connectrpc/connect-web";
 import { create, toBinary } from "@bufbuild/protobuf";
 import { AnySchema, anyPack } from "@bufbuild/protobuf/wkt";
-import { tableFromIPC } from "apache-arrow";
+import { RecordBatchReader, Table } from "apache-arrow";
 
 import {
   FlightService,
@@ -34,7 +34,7 @@ export function createSparrowClient({ endpoint, user, pass }) {
   const transport = createGrpcWebTransport({ baseUrl: endpoint });
   const client = createClient(FlightService, transport);
   let auth = "Basic " + btoa(`${user}:${pass ?? ""}`);
-  let bootstrapped = false;
+  let bootstrapping = null;
 
   const callOpts = () => ({
     headers: { authorization: auth },
@@ -53,16 +53,23 @@ export function createSparrowClient({ endpoint, user, pass }) {
     });
   }
 
-  async function bootstrap() {
-    if (bootstrapped) return;
-    await client.getFlightInfo(
-      descFor(CommandGetSqlInfoSchema, create(CommandGetSqlInfoSchema, { info: [] })),
-      callOpts(),
-    );
-    bootstrapped = true;
+  // Single-flight: concurrent first queries must share one bootstrap, or the
+  // second Basic call races the first's Bearer adoption mid-flight.
+  function bootstrap() {
+    bootstrapping ??= client
+      .getFlightInfo(
+        descFor(CommandGetSqlInfoSchema, create(CommandGetSqlInfoSchema, { info: [] })),
+        callOpts(),
+      )
+      .then(() => undefined);
+    return bootstrapping;
   }
 
-  async function query(sql) {
+  // query(sql, { onBatch }) — batches decode AS THEY ARRIVE off the wire.
+  // onBatch(batch, batchIndex, msSinceStart) fires per Arrow RecordBatch, so a
+  // chart can render before the stream ends. Returns the assembled Table plus
+  // wire timings, same shape as before.
+  async function query(sql, opts = {}) {
     const t0 = performance.now();
     await bootstrap();
     const tAuth = performance.now();
@@ -73,29 +80,37 @@ export function createSparrowClient({ endpoint, user, pass }) {
     );
     const tInfo = performance.now();
 
-    const chunks = [];
-    let frames = 0;
+    let bytes = 0;
+    async function* ipcStream() {
+      for await (const fd of client.doGet(info.endpoint[0].ticket, callOpts())) {
+        const chunk = encapsulate(fd.dataHeader, fd.dataBody);
+        bytes += chunk.length;
+        yield chunk;
+      }
+      yield EOS;
+    }
+
+    const reader = await RecordBatchReader.from(ipcStream());
+    const batches = [];
     let tFirst = 0;
-    for await (const fd of client.doGet(info.endpoint[0].ticket, callOpts())) {
-      if (++frames === 1) tFirst = performance.now();
-      chunks.push(encapsulate(fd.dataHeader, fd.dataBody));
+    for await (const batch of reader) {
+      batches.push(batch);
+      if (!tFirst) tFirst = performance.now();
+      if (opts.onBatch) {
+        try {
+          opts.onBatch(batch, batches.length, Math.round(performance.now() - t0));
+        } catch (_) { /* a rendering hiccup must not kill the stream */ }
+      }
     }
-    chunks.push(EOS);
-    const total = chunks.reduce((n, c) => n + c.length, 0);
-    const ipc = new Uint8Array(total);
-    let off = 0;
-    for (const c of chunks) {
-      ipc.set(c, off);
-      off += c.length;
-    }
-    const table = tableFromIPC(ipc);
+    const table = new Table(reader.schema, batches);
     const tEnd = performance.now();
 
     return {
       table,
       rows: table.numRows,
       cols: table.schema.fields.map((f) => f.name),
-      bytes: total,
+      bytes,
+      batches: batches.length,
       timing: {
         auth: Math.round(tAuth - t0),
         plan: Math.round(tInfo - tAuth),
