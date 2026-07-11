@@ -1,49 +1,33 @@
 # @sparrowjs/flight
 
 **The missing browser client for Apache Arrow Flight** — a browser implementation of
-Flight over gRPC-web, tied to no particular server.
+Apache Arrow Flight and Flight SQL over gRPC-web. Works with any Flight server.
 
 > **Status**
 > ✔ Powers the [live demo at sparrowflight.io](https://sparrowflight.io/demo/js)
-> ✔ Browser implementation of Apache Arrow Flight over gRPC-web — works with any Flight SQL server
+> ✔ Browser implementation of Apache Arrow Flight + Flight SQL over gRPC-web
 > ⚠ M0 — API not yet stable, not yet on npm. Honest scope below.
 
-[![The live demo — ten charts, one Flight call, 2.8× faster than ten](docs/demo.png)](https://sparrowflight.io/demo/js)
+[![The live demo — ten charts, one Flight call](docs/demo.png)](https://sparrowflight.io/demo/js)
 
-*This isn't a mock-up: the screenshot is [a public page](https://sparrowflight.io/demo/js) where your
-browser opens an Arrow Flight SQL connection to a 136-million-row production server —
-ten full-history series in one call, 71,979 rows in ~2.4 s, no REST, no JSON, no backend.*
+*This screenshot is [the live demo](https://sparrowflight.io/demo/js): your browser
+opens a Flight SQL connection to a 136-million-row production server — ten
+full-history series in one call, 71,979 rows in about a second. No REST gateway,
+no JSON backend.*
 
 ## Why
 
 Arrow Flight was designed for high-performance analytics. Browsers were left behind —
-they never learned gRPC, so most Flight deployments end up flattening columnar data
-into JSON before a chart can touch it.
+they never learned gRPC, so most Flight deployments end the same way: a REST gateway
+converting Arrow back into JSON before a chart can touch it. sparrowJS removes that
+translation layer.
 
-sparrowJS closes that gap: Flight over **gRPC-web**, decoded by **Apache Arrow's
-JavaScript implementation**, streaming record batches directly into the page — no JSON,
-zero copies, no REST gateway rewriting your data as text.
+Flight over **gRPC-web**, decoded by **Apache Arrow's JavaScript library**, streaming
+record batches directly into the page — no JSON, no REST gateway in between.
 
-It is not tied to any particular server. The same auth + discovery pattern has been
-validated against **GizmoSQL (DuckDB)**, **InfluxDB 3 Core**, **Dremio OSS**, and the
-EnergyScope production server ([Sparrow](https://sparrowflight.io)).
-
-## The landscape (as of July 2026)
-
-Good JavaScript Flight SQL clients exist — targeting **Node**, riding native gRPC,
-which browsers cannot speak. Verified July 2026:
-
-| | Intended runtime | Transport | Flight SQL |
-|---|---|---|---|
-| `apache-arrow` (JS) | browser + Node | — (Arrow IPC decode only; no Flight transport) | — |
-| `gizmodata/gizmosql-client-js` | Node ≥ 20 | native gRPC (`@grpc/grpc-js`) | ✅ |
-| `lancedb/flight-sql-js-client` | Node (*"currently all testing is done on Node"*) | native gRPC | ✅ (experimental) |
-| **`@sparrowjs/flight`** | **browser-first** (proven in Node too) | **gRPC-web** | ✅ |
-
-In the browser, the standard answer is still a REST/JSON backend in front of Flight.
-sparrowJS implements the transport stack browsers lack — connect-web → gRPC-web →
-Flight RPC → Flight SQL → Arrow IPC → typed arrays — so the page talks to the Flight
-server itself.
+The same auth + discovery pattern is validated against **GizmoSQL (DuckDB)**,
+**InfluxDB 3 Core**, **Dremio OSS**, and the EnergyScope production server
+([Sparrow](https://sparrowflight.io)).
 
 ## The API, as intended
 
@@ -74,13 +58,25 @@ table plus wire timings. The `FlightClient` API above is the packaging target.
 
 ## How it works
 
+```
+your browser
+    │  sparrowJS (@sparrowjs/flight)
+    │  gRPC-web
+    ▼
+Envoy grpc_web filter          ← config, not code
+    │  native gRPC (h2c)
+    ▼
+any Apache Arrow Flight SQL server
+(Sparrow · GizmoSQL/DuckDB · ROAPI/DataFusion · Dremio · InfluxDB 3 · …)
+```
+
 - **Transport** — `@connectrpc/connect-web` (fetch + ReadableStream). Browsers can't
   speak gRPC, so a translation layer sits at the edge: any Envoy with the standard
   `grpc_web` filter (or a Traefik `grpcWeb` middleware) in front of your Flight server.
   The one powering the live demo runs nginx → Envoy `grpc_web` → Flight server.
 - **Decode** — `FlightData` frames are reassembled into an Arrow IPC stream
   (continuation marker + padded header + padded body + EOS) and handed to
-  `apache-arrow`. Zero copies after decode: columns are typed arrays.
+  `apache-arrow`. Arrow columns are exposed as typed arrays after decode.
 - **Auth** — Basic bootstrap, then **Bearer adoption**: many Flight servers
   (GizmoSQL-style) mint a Bearer from your Basic credentials and bind the session to
   it, so the client adopts the token from the response headers — the same silent trick
@@ -104,8 +100,26 @@ REST 3.1 req/s (p95 8.4 s)**. Full write-up on
 [sparrowflight.io/js](https://sparrowflight.io/js).
 
 Streaming is real, not aspirational: the client decodes record batches as they
-arrive (`onBatch` callback) — the demo's ten-chart wall fills progressively while
-the stream flows.
+arrive (`onBatch` callback). On the demo's "watch it stream" button the first chart
+paints at ~270 ms — before the entire REST response has landed — and all ten charts
+complete by ~900 ms across 36 record batches.
+
+## The landscape (as of July 2026)
+
+Good JavaScript Flight SQL clients exist — targeting **Node**, riding native gRPC,
+which browsers cannot speak. Verified July 2026:
+
+| | Intended runtime | Transport | Flight SQL |
+|---|---|---|---|
+| `apache-arrow` (JS) | browser + Node | — (Arrow IPC decode only; no Flight transport) | — |
+| `gizmodata/gizmosql-client-js` | Node ≥ 20 | native gRPC (`@grpc/grpc-js`) | ✅ |
+| `lancedb/flight-sql-js-client` | Node (*"currently all testing is done on Node"*) | native gRPC | ✅ (experimental) |
+| **`@sparrowjs/flight`** | **browser-first** (proven in Node too) | **gRPC-web** | ✅ |
+
+In the browser, the standard answer is still a REST/JSON backend in front of Flight.
+sparrowJS implements the transport stack browsers lack — connect-web → gRPC-web →
+Flight RPC → Flight SQL → Arrow IPC → typed arrays — so the page talks to the Flight
+server itself.
 
 ## Run it from source
 
@@ -128,7 +142,8 @@ npx esbuild src/demo-entry.js --bundle --minify --format=iife \
 
 ## Scope — product work, not research
 
-M0 proved the approach; the pipeline runs in production. What's left:
+M0 proved the approach; the pipeline runs in production. What's left is product
+work, not research:
 
 - [ ] `FlightClient` API polish (connect / doGet / query surface above)
 - [ ] multi-batch and dictionary IPC edge cases
