@@ -12,8 +12,9 @@ Apache Arrow Flight and Flight SQL over gRPC-web. Works with any Flight server.
 
 *This screenshot is [the live demo](https://sparrowflight.io/demo/js): your browser
 opens a Flight SQL connection to a 136-million-row production server — ten
-full-history series in one call, 71,979 rows in about a second. No REST gateway,
-no JSON backend.*
+full-history series in one call, 71,979 rows in half a second. The second timing line
+is the REST+JSON control group, racing on the same page: 1.6× slower, 4.8 MB of JSON
+against 1.7 MB of Arrow.*
 
 ## Why
 
