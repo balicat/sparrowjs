@@ -1,20 +1,20 @@
 # @sparrowjs/flight
 
 **The missing browser client for Apache Arrow Flight** — a browser implementation of
-Apache Arrow Flight and Flight SQL over gRPC-web. Works with any Flight server.
+Apache Arrow Flight and Flight SQL over gRPC-web. Works with any Apache Arrow Flight
+or Flight SQL server.
 
-> **Status**
-> ✔ Powers the [live demo at sparrowflight.io](https://sparrowflight.io/demo/js)
-> ✔ Browser implementation of Apache Arrow Flight + Flight SQL over gRPC-web
-> ⚠ M0 — API not yet stable, not yet on npm. Honest scope below.
+> **Status** &nbsp; ✔ powers the [live demo at sparrowflight.io](https://sparrowflight.io/demo/js) &nbsp;·&nbsp; ⚠ API not yet stable, not yet on npm
+> **Supports** &nbsp; ✔ Flight &nbsp; ✔ Flight SQL &nbsp; ✔ browser &nbsp; ✔ Node (same transport) &nbsp; ✔ gRPC-web
+> **Validated against** &nbsp; ✔ Dremio OSS &nbsp; ✔ InfluxDB 3 Core &nbsp; ✔ GizmoSQL (DuckDB) &nbsp; ✔ Sparrow Flight
 
 [![The live demo — ten charts, one Flight call](docs/demo.png)](https://sparrowflight.io/demo/js)
 
-*This screenshot is [the live demo](https://sparrowflight.io/demo/js): your browser
-opens a Flight SQL connection to a 136-million-row production server — ten
-full-history series in one call, 71,979 rows in half a second. The second timing line
-is the REST+JSON control group, racing on the same page: 1.6× slower, 4.8 MB of JSON
-against 1.7 MB of Arrow.*
+*This is [the live demo](https://sparrowflight.io/demo/js). Your browser opens a
+Flight SQL connection to a 136-million-row production server — ten full-history
+series, one call, half a second. No REST gateway. No JSON backend. (The second
+timing line is one, though: the REST+JSON control group racing on the same page —
+1.6× slower, 4.8 MB of JSON against 1.7 MB of Arrow.)*
 
 ## Why
 
@@ -128,7 +128,7 @@ server itself.
 npm install
 npm run gen        # regenerate Flight/FlightSql stubs from the Apache protos (buf)
 
-# M0 proof script — full chain in Node using the *browser* transport:
+# proof script — the full chain in Node using the *browser* transport:
 SPARROW_ENDPOINT=http://your-grpc-web-edge:8890 \
 SPARROW_USER=user SPARROW_PASS=pass \
 node src/m0.mjs "SELECT 42 AS answer"
@@ -143,8 +143,7 @@ npx esbuild src/demo-entry.js --bundle --minify --format=iife \
 
 ## Scope — product work, not research
 
-M0 proved the approach; the pipeline runs in production. What's left is product
-work, not research:
+The pipeline runs in production. What's left is product work, not research:
 
 - [ ] `FlightClient` API polish (connect / doGet / query surface above)
 - [ ] multi-batch and dictionary IPC edge cases
