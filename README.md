@@ -3,8 +3,10 @@
 **The missing browser client for Apache Arrow Flight** — a browser implementation of
 Flight over gRPC-web, tied to no particular server.
 
-> **Status: M0.** Works today — it powers the [live demo at sparrowflight.io](https://sparrowflight.io/demo/js).
-> The API is not yet stable and the package is not yet on npm. Honest scope below.
+> **Status**
+> ✔ Powers the [live demo at sparrowflight.io](https://sparrowflight.io/demo/js)
+> ✔ Browser implementation of Apache Arrow Flight over gRPC-web — works with any Flight SQL server
+> ⚠ M0 — API not yet stable, not yet on npm. Honest scope below.
 
 [![The live demo — ten charts, one Flight call, 2.8× faster than ten](docs/demo.png)](https://sparrowflight.io/demo/js)
 
@@ -28,15 +30,15 @@ EnergyScope production server ([Sparrow](https://sparrowflight.io)).
 
 ## The landscape (as of July 2026)
 
-Good JavaScript Flight SQL clients exist — for **Node**. They ride
-`@grpc/grpc-js`, native gRPC, which browsers cannot speak:
+Good JavaScript Flight SQL clients exist — targeting **Node**, riding native gRPC,
+which browsers cannot speak. Verified July 2026:
 
-| | Browser | Node | Transport | Flight SQL |
-|---|---|---|---|---|
-| `apache-arrow` (JS) | ✅ | ✅ | — (IPC decode only; no Flight transport) | ❌ |
-| `gizmodata/gizmosql-client-js` | ❌ | ✅ (≥20) | native gRPC | ✅ |
-| `lancedb/flight-sql-js-client` | ❌ *("currently all testing is done on Node")* | ✅ | native gRPC | ✅ (experimental) |
-| **`@sparrowjs/flight`** | **✅** | ✅ | **gRPC-web** | ✅ |
+| | Intended runtime | Transport | Flight SQL |
+|---|---|---|---|
+| `apache-arrow` (JS) | browser + Node | — (Arrow IPC decode only; no Flight transport) | — |
+| `gizmodata/gizmosql-client-js` | Node ≥ 20 | native gRPC (`@grpc/grpc-js`) | ✅ |
+| `lancedb/flight-sql-js-client` | Node (*"currently all testing is done on Node"*) | native gRPC | ✅ (experimental) |
+| **`@sparrowjs/flight`** | **browser-first** (proven in Node too) | **gRPC-web** | ✅ |
 
 In the browser, the standard answer is still a REST/JSON backend in front of Flight.
 sparrowJS implements the transport stack browsers lack — connect-web → gRPC-web →
