@@ -52,13 +52,19 @@ import { FlightClient } from "@sparrowjs/flight";
 
 const client = await FlightClient.connect({
   endpoint: "/flight",
-  token,
+  user: "demo",   // Basic in, Bearer adopted automatically
 });
 
-const stream = await client.doGet({ ticket });
+// Flight SQL — the everyday path
+const stream = client.query(`
+  SELECT period, value FROM series_data
+  WHERE series_id = 'PET.RWTC.D'
+`);
 for await (const batch of stream) {
   chart.append(batch); // Apache Arrow JS RecordBatch
 }
+
+// raw Flight against any server: client.getFlightInfo(desc) → client.doGet(ticket)
 ```
 
 What runs today is the M0 factory (`src/demo-entry.js`) — a `createSparrowClient()`
