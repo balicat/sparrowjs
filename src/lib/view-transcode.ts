@@ -406,12 +406,24 @@ function buildRecordBatchMessage(
 
 // ── the stream transform ───────────────────────────────────────────────────
 
+// Feature-detect: apache/arrow-js merged View-type read support (PR #320,
+// 2025-11-19) but no npm release carries it yet (latest 21.1.0 predates the
+// merge). The moment the user's installed apache-arrow knows Utf8View, this
+// shim steps aside and native decode takes over (zero-copy views > our copy).
+import { Type as ArrowType } from "apache-arrow";
+const ARROW_DECODES_VIEWS = typeof (ArrowType as Record<string, unknown>)["Utf8View"] === "number";
+
 /**
  * Wrap one endpoint's encapsulated-IPC stream. Watches the schema message;
  * when it declares flat View columns, rewrites the schema in place and
- * transcodes every RecordBatch. Zero-cost passthrough otherwise.
+ * transcodes every RecordBatch. Zero-cost passthrough otherwise, and full
+ * passthrough when the installed Arrow JS decodes View types natively.
  */
 export async function* viewTranscode(source: AsyncGenerator<Uint8Array>): AsyncGenerator<Uint8Array> {
+  if (ARROW_DECODES_VIEWS) {
+    yield* source;
+    return;
+  }
   let plan: SchemaPlan | null = null;
   let sawSchema = false;
   let version = 4; // MetadataVersion V5; replaced by the schema message's value
