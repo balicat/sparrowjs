@@ -3,8 +3,15 @@
 //   const { table, stats } = await stream → assembled result (demo-factory shape)
 // Iterating consumes; awaiting consumes-and-assembles; awaiting after (or
 // during) iteration returns the same accumulated result. Iterating twice throws.
+//
+// Internals (reshaped after the tester's M1 adversarial pass):
+// one pull-based inner pump (#run) drives ALL bookkeeping; the public
+// iterator, then(), and the schema primer just pull from it. Pull-based
+// means awaiting .schema decodes exactly one frame and leaves the rest of
+// the stream on the wire (backpressure via generator semantics).
 import { RecordBatch, RecordBatchReader, Schema, Table } from "apache-arrow";
 import { convertBatch } from "./bigint.js";
+import { decorateDecodeError } from "./errors.js";
 import type { BigIntMode, QueryOptions, QueryResult, QueryStats } from "./types.js";
 
 /** Timing/size marks recorded by the pump as the wire work happens. */
@@ -61,6 +68,12 @@ export type EndpointPump = (
   signal: AbortSignal,
 ) => AsyncGenerator<AsyncGenerator<Uint8Array>>;
 
+function cancelError(): Error {
+  const e = new Error("query canceled by cancel()");
+  e.name = "AbortError";
+  return e;
+}
+
 export class QueryStream implements AsyncIterable<RecordBatch>, PromiseLike<QueryResult> {
   readonly #pump: EndpointPump;
   readonly #marks = new Marks();
@@ -73,11 +86,17 @@ export class QueryStream implements AsyncIterable<RecordBatch>, PromiseLike<Quer
   #schemaValue: Schema | undefined;
   #completion: Promise<QueryResult> | undefined;
 
+  // pull machinery: one inner pump, serialized pulls, a replay buffer for
+  // frames the schema primer decoded before a consumer arrived
+  #inner: AsyncGenerator<RecordBatch> | undefined;
+  #pullChain: Promise<unknown> = Promise.resolve();
+  #buffered: RecordBatch[] = [];
+  #priming = false;
+
   #resolveSchema!: (s: Schema) => void;
   #rejectSchema!: (e: unknown) => void;
   #schemaSettled = false;
-  /** Resolves at the first frame — before the data finishes streaming. */
-  readonly schema: Promise<Schema>;
+  readonly #schemaPromise: Promise<Schema>;
 
   #resolveDone!: () => void;
   #rejectDone!: (e: unknown) => void;
@@ -87,7 +106,7 @@ export class QueryStream implements AsyncIterable<RecordBatch>, PromiseLike<Quer
     this.#pump = pump;
     this.#onBatch = opts.onBatch;
     this.#mode = opts.bigIntMode ?? defaultMode;
-    this.schema = new Promise<Schema>((res, rej) => {
+    this.#schemaPromise = new Promise<Schema>((res, rej) => {
       this.#resolveSchema = res;
       this.#rejectSchema = rej;
     });
@@ -97,11 +116,22 @@ export class QueryStream implements AsyncIterable<RecordBatch>, PromiseLike<Quer
     });
     // both settle through controlled paths; avoid unhandled-rejection noise
     // when a consumer only uses one of the two styles
-    this.schema.catch(() => {});
+    this.#schemaPromise.catch(() => {});
     this.#done.catch(() => {});
   }
 
-  /** Abort the underlying fetch mid-stream; in-flight consumption rejects. */
+  /**
+   * Resolves at the first frame. Accessing it starts the query lazily and
+   * decodes exactly ONE frame (kept and replayed to a later iterator) — so a
+   * standalone `await stream.schema` settles without consuming the stream.
+   */
+  get schema(): Promise<Schema> {
+    void this.#primeSchema();
+    return this.#schemaPromise;
+  }
+
+  /** Abort the fetch AND stop batch delivery — in-flight consumption rejects,
+   *  even when the transport already buffered the whole (small) response. */
   cancel(): void {
     this.#abort.abort();
   }
@@ -113,14 +143,17 @@ export class QueryStream implements AsyncIterable<RecordBatch>, PromiseLike<Quer
     this.#resolveSchema(s);
   }
 
-  async *[Symbol.asyncIterator](): AsyncGenerator<RecordBatch> {
-    if (this.#iterStarted) throw new Error("QueryStream already consumed — create a new query");
-    this.#iterStarted = true;
+  // ── the single inner pump: all bookkeeping lives here ───────────────────
+
+  async *#run(): AsyncGenerator<RecordBatch> {
     let failed: unknown;
     try {
       for await (const ipc of this.#pump(this.#marks, this.#abort.signal)) {
         const reader = await RecordBatchReader.from(ipc);
         for await (let batch of reader) {
+          // cancel() must bite even when the transport already buffered
+          // everything (tester F2) — the signal only stops network pulls
+          if (this.#abort.signal.aborted) throw cancelError();
           if (this.#mode !== "bigint") batch = convertBatch(batch, this.#mode);
           // settle AFTER conversion — the assembled Table and the public
           // schema promise must describe the batches the consumer receives
@@ -134,19 +167,21 @@ export class QueryStream implements AsyncIterable<RecordBatch>, PromiseLike<Quer
               // a rendering hiccup must not kill the stream
             }
           }
+          // onBatch may have called cancel() — honor it before yielding more
+          if (this.#abort.signal.aborted) throw cancelError();
           yield batch;
         }
         // empty result: the reader still saw the schema message
         if (reader.schema) this.#settleSchema(reader.schema);
       }
     } catch (e) {
-      failed = e;
+      failed = decorateDecodeError(e);
       if (!this.#schemaSettled) {
         this.#schemaSettled = true;
-        this.#rejectSchema(e);
+        this.#rejectSchema(failed);
       }
-      this.#rejectDone(e);
-      throw e;
+      this.#rejectDone(failed);
+      throw failed;
     } finally {
       if (failed === undefined) {
         // normal end OR early break by the consumer — both count as done
@@ -159,16 +194,73 @@ export class QueryStream implements AsyncIterable<RecordBatch>, PromiseLike<Quer
     }
   }
 
+  /** Serialize inner pulls — the schema primer and an iterator must never
+   *  interleave two next() calls on the same generator. */
+  #pull(): Promise<IteratorResult<RecordBatch>> {
+    this.#inner ??= this.#run();
+    const it = this.#inner;
+    const p = this.#pullChain.then(() => it.next());
+    this.#pullChain = p.catch(() => {});
+    return p;
+  }
+
+  async #primeSchema(): Promise<void> {
+    if (this.#schemaSettled || this.#iterStarted || this.#priming) return;
+    this.#priming = true;
+    try {
+      while (!this.#schemaSettled) {
+        const n = await this.#pull();
+        if (n.done) break;
+        this.#buffered.push(n.value);
+      }
+    } catch {
+      // the schema promise was rejected inside #run; nothing more to do
+    }
+  }
+
+  async *[Symbol.asyncIterator](): AsyncGenerator<RecordBatch> {
+    if (this.#iterStarted) throw new Error("QueryStream already consumed — create a new query");
+    this.#iterStarted = true;
+    this.#inner ??= this.#run();
+    try {
+      for (;;) {
+        // frames the schema primer already decoded replay first
+        if (this.#buffered.length) {
+          yield this.#buffered.shift()!;
+          continue;
+        }
+        const n = await this.#pull();
+        // a primer pull that was in flight when we started may have landed
+        // in the buffer while we awaited — keep wire order by queueing our
+        // own pull behind it
+        if (this.#buffered.length) {
+          if (!n.done) this.#buffered.push(n.value);
+          yield this.#buffered.shift()!;
+          continue;
+        }
+        if (n.done) return;
+        yield n.value;
+      }
+    } finally {
+      // early break/throw by the consumer: close the pump (resolves #done,
+      // releases the wire). No-op after normal completion.
+      await this.#inner.return(undefined).then(
+        () => undefined,
+        () => undefined,
+      );
+    }
+  }
+
   #result(): Promise<QueryResult> {
     this.#completion ??= (async () => {
       if (!this.#iterStarted) {
         for await (const _ of this) {
-          // self-drain; batches accumulate as a side effect
+          void _; // self-drain; batches accumulate as a side effect
         }
       } else {
         await this.#done;
       }
-      const schema = this.#schemaValue ?? (await this.schema);
+      const schema = this.#schemaValue ?? (await this.#schemaPromise);
       const table = new Table(schema, this.#accumulated);
       return { table, stats: this.#marks.snapshot() };
     })();

@@ -193,6 +193,45 @@ test("dialect: GizmoSQL (DuckDB C++) over the same wire", async () => {
   assert.equal(Number(table.getChild("answer").get(0)), 42);
 });
 
+// ── regressions from the tester's M1 adversarial pass (2026-07-15) ────────
+
+test("F1: standalone `await stream.schema` settles without consuming", async () => {
+  const client = await connect(SPARROW);
+  const stream = client.query("SELECT range AS n FROM range(100)");
+  const schema = await Promise.race([
+    stream.schema,
+    new Promise((_, rej) => setTimeout(() => rej(new Error("schema deadlock (F1)")), 8000)),
+  ]);
+  assert.deepEqual(schema.fields.map((f) => f.name), ["n"]);
+  // and the stream is still fully consumable afterward — primed frame replays
+  let rows = 0;
+  for await (const b of stream) rows += b.numRows;
+  assert.equal(rows, 100);
+});
+
+test("F2: cancel() from onBatch rejects even on a small, fully-buffered result", async () => {
+  const client = await connect(SPARROW);
+  const stream = client.query("SELECT range AS n FROM range(300000)", {
+    onBatch: () => stream.cancel(),
+  });
+  await assert.rejects(stream, /cancel/i);
+});
+
+test("F2: cancel() before any consumption rejects the await", async () => {
+  const client = await connect(SPARROW);
+  const stream = client.query("SELECT range AS n FROM range(1000)");
+  stream.cancel();
+  await assert.rejects(stream);
+});
+
+test("F5: ROAPI Utf8View decode error names the fix", async () => {
+  const client = await connect({ endpoint: `${ORIGIN}/flight-roapi`, user: "demo", pass: "demo" });
+  await assert.rejects(
+    client.query("SELECT series_id FROM series_data LIMIT 1"),
+    /schema_force_view_types=false/,
+  );
+});
+
 test("dialect: ROAPI (DataFusion) — connect tolerates missing GetSqlInfo", async () => {
   const client = await connect({ endpoint: `${ORIGIN}/flight-roapi`, user: "demo", pass: "demo" });
   const caps = client.capabilities(); // may be empty — that's the point

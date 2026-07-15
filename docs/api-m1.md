@@ -55,8 +55,13 @@ const { table, stats } = await client.query(sql, {
 
 // ── QueryStream ──────────────────────────────────────────────────────────
 interface QueryStream extends AsyncIterable<RecordBatch>, PromiseLike<QueryResult> {
-  cancel(): void;                 // abort the underlying fetch mid-stream
-  readonly schema: Promise<Schema>; // resolves at first frame, before data ends
+  cancel(): void;                 // abort the fetch AND stop batch delivery —
+                                  // in-flight consumption rejects, even when the
+                                  // transport already buffered the whole response
+  readonly schema: Promise<Schema>; // resolves at first frame; ACCESSING it starts
+                                  // the query lazily and decodes exactly one frame
+                                  // (buffered + replayed to a later iterator), so a
+                                  // standalone `await stream.schema` settles alone
 }
 interface QueryResult {
   table: Table;
@@ -91,12 +96,16 @@ const stream = client
   .query();                       // → QueryStream, same dual nature
 // Builds the SELECT exactly like `sparrow query` does. .toSQL() exposes the
 // string. Deliberately shallow — a WHERE-string, not an expression DSL.
+// ⚠ where()/select()/orderBy() are VERBATIM, UNSANITIZED passthrough into
+// SQL text. Never interpolate untrusted (user) input — sanitize or whitelist
+// in the caller. This is a query BUILDER, not an escaping layer.
 // (Natural place to emit Substrait later; out of scope for M1.)
 
 // ── metadata (Tier 2, the CLI's hard-won logic) ──────────────────────────
 const caps = client.capabilities();       // sync — cached from bootstrap
-// { vendorName, vendorVersion, arrowVersion, readOnly, sqlSupported,
+// { vendorName, vendorVersion, arrowVersion, readOnly, sql,
 //   substrait, transactions, cancel, raw: Map<number, unknown> }
+// fields a server didn't advertise are undefined — never a fabricated false
 
 const tabs = await client.tables();       // GetTables RPC (portable path)
 // [{ catalog, dbSchema, name, type }]    // includes MACRO rows (search_meta)
@@ -131,7 +140,8 @@ raw `doGet` is always untouched.
 
 Arrow JS has no Utf8View/BinaryView decode — DataFusion-family servers
 (ROAPI) need `schema_force_view_types=false` server-side. `connect()` can't
-detect it preflight; the decode error message will name the fix.
+detect it preflight; the decode error is caught and re-thrown naming the
+type and the server-side fix (the raw upstream message is kept as `cause`).
 
 ## Explicitly NOT in M1
 
