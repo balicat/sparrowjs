@@ -1,23 +1,46 @@
 {
   "name": "@sparrowjs/flight",
-  "version": "0.0.1-m0",
-  "description": "Arrow Flight. In the browser. Finally. \u2014 gRPC-web + Apache Arrow JS client for any Flight SQL server",
+  "version": "0.1.0-m1",
+  "description": "Arrow Flight. In the browser. Finally. — gRPC-web + Apache Arrow JS client for any Flight SQL server",
   "type": "module",
   "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "gen": "buf generate",
+    "build": "tsc -p tsconfig.json && node scripts/copy-gen.mjs",
+    "test": "npm run build && node --test \"test/**/*.test.mjs\"",
+    "test:unit": "npm run build && node --test \"test/unit/*.test.mjs\"",
+    "test:browser": "npm run build && node test/browser/run.mjs",
     "m0": "node src/m0.mjs"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.2.0",
     "@connectrpc/connect": "^2.0.0",
-    "@connectrpc/connect-web": "^2.0.0",
-    "apache-arrow": "^18.1.0"
+    "@connectrpc/connect-web": "^2.0.0"
+  },
+  "peerDependencies": {
+    "apache-arrow": ">=17"
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.47.0",
     "@bufbuild/protoc-gen-es": "^2.2.0",
-    "esbuild": "^0.28.1"
+    "apache-arrow": "^18.1.0",
+    "esbuild": "^0.28.1",
+    "playwright-core": "^1.61.1",
+    "typescript": "^5.4.0"
   },
   "license": "Apache-2.0",
   "repository": {

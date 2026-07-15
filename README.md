@@ -30,32 +30,37 @@ The same auth + discovery pattern is validated against **GizmoSQL (DuckDB)**,
 **InfluxDB 3 Core**, **Dremio OSS**, and the EnergyScope production server
 ([Sparrow](https://sparrowflight.io)).
 
-## The API, as intended
+## The API
 
 ```js
-import { FlightClient } from "@sparrowjs/flight";
+import { connect } from "@sparrowjs/flight";
 
-const client = await FlightClient.connect({
+const client = await connect({
   endpoint: "/flight",
   user: "demo",   // Basic in, Bearer adopted automatically
 });
 
-// Flight SQL — the everyday path
-const stream = client.query(`
-  SELECT period, value FROM series_data
-  WHERE series_id = 'PET.RWTC.D'
-`);
-for await (const batch of stream) {
-  chart.append(batch); // Apache Arrow JS RecordBatch
+// Flight SQL — the everyday path. One method, two consumption styles:
+for await (const batch of client.query("SELECT period, value FROM series_data WHERE …")) {
+  chart.append(batch);      // Apache Arrow JS RecordBatch, as it arrives
 }
+const { table, stats } = await client.query("SELECT …");
+// stats: { planMs, firstBatchMs, streamMs, rows, wireBytes, mbitPerSec, … }
+
+// typed builder, metadata, int64 policy:
+await client.from("series_data").select("period", "value").limit(1000).query();
+client.capabilities();      // GetSqlInfo decoded — vendor, substrait, readOnly…
+await client.tables();      // GetTables discovery (the portable path)
+await client.query(sql, { bigIntMode: "string" }); // int64 without 2^53 surprises
 
 // raw Flight against any server: client.getFlightInfo(desc) → client.doGet(ticket)
 ```
 
-What runs today is the demo factory (`src/demo-entry.js`) — a `createSparrowClient()`
-that speaks Flight SQL (`CommandStatementQuery` → `GetFlightInfo` → `DoGet`), streams
-record batches as they arrive (`onBatch` callback), and returns the assembled Arrow
-table plus wire timings. The `FlightClient` API above is the packaging target.
+Full surface + design rationale: [docs/api-m1.md](docs/api-m1.md). `connect()` fails
+fast on a bad endpoint or credentials, adopts the Bearer, and seeds `capabilities()`
+in the same round trip. Every result carries wire stats — the same anatomy
+sparrowCLI's `--stats` prints. (The live demo still runs the pre-library factory,
+`src/demo-entry.js`; it migrates to the library at npm-publish time.)
 
 ## How it works
 
@@ -145,10 +150,13 @@ npx esbuild src/demo-entry.js --bundle --minify --format=iife \
 
 The pipeline runs in production. What's left is product work, not research:
 
-- [ ] `FlightClient` API polish (connect / doGet / query surface above)
-- [ ] multi-batch and dictionary IPC edge cases
-- [ ] test coverage
-- [ ] npm packaging and publishing
+- [x] `FlightClient` API surface — `connect()` / `query()` (async-iterate OR await it) /
+  `from()` builder / `capabilities()` / `tables()` / `schema()` / raw `getFlightInfo()`+`doGet()` —
+  see [docs/api-m1.md](docs/api-m1.md)
+- [x] multi-batch and dictionary IPC (multi-endpoint FlightInfo, per-endpoint readers)
+- [x] test coverage — unit + live integration against three dialects
+  (Sparrow · GizmoSQL · ROAPI) + an automated headless-Chrome smoke (`npm run test:browser`)
+- [ ] npm packaging and publishing (M4 — the API above ships as written)
 
 ## The Sparrow family
 
