@@ -19,6 +19,9 @@ export class Marks {
   t0 = performance.now();
   authMs = 0;
   planMs = 0;
+  /** schema decoded from FlightInfo — heals servers whose empty-result
+   *  streams carry a field-less schema (DataFusion/ROAPI, tester F6) */
+  fallbackSchema: Schema | undefined;
   tPlanDone = 0;
   tFirstBatch = 0;
   tLastBatch = 0;
@@ -171,8 +174,12 @@ export class QueryStream implements AsyncIterable<RecordBatch>, PromiseLike<Quer
           if (this.#abort.signal.aborted) throw cancelError();
           yield batch;
         }
-        // empty result: the reader still saw the schema message
-        if (reader.schema) this.#settleSchema(reader.schema);
+        // empty result: the reader still saw the schema message. Some
+        // servers (DataFusion/ROAPI) send a FIELD-LESS schema on empty
+        // streams — prefer the FlightInfo schema then (tester F6).
+        if (reader.schema?.fields.length) this.#settleSchema(reader.schema);
+        else if (this.#marks.fallbackSchema) this.#settleSchema(this.#marks.fallbackSchema);
+        else if (reader.schema) this.#settleSchema(reader.schema);
       }
     } catch (e) {
       failed = decorateDecodeError(e);
@@ -186,8 +193,12 @@ export class QueryStream implements AsyncIterable<RecordBatch>, PromiseLike<Quer
       if (failed === undefined) {
         // normal end OR early break by the consumer — both count as done
         if (!this.#schemaSettled) {
-          this.#schemaSettled = true;
-          this.#rejectSchema(new Error("stream ended before a schema arrived"));
+          if (this.#marks.fallbackSchema) {
+            this.#settleSchema(this.#marks.fallbackSchema);
+          } else {
+            this.#schemaSettled = true;
+            this.#rejectSchema(new Error("stream ended before a schema arrived"));
+          }
         }
         this.#resolveDone();
       }

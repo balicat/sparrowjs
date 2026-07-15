@@ -3,7 +3,7 @@
 // see dialect-compat). The result is itself an Arrow table we decode with our
 // own pipeline.
 import { Schema, Table, tableFromIPC } from "apache-arrow";
-import { EOS } from "./ipc.js";
+import { encapsulate, EOS } from "./ipc.js";
 import type { TableInfo } from "./types.js";
 
 export function tableInfosFrom(t: Table): TableInfo[] {
@@ -39,15 +39,21 @@ export function schemaBytesFor(t: Table, tableName: string): Uint8Array | undefi
   return undefined;
 }
 
-/** Serialized-schema bytes → arrow Schema. Servers differ on whether the
- *  encapsulated message carries an EOS; try both. */
+/** Serialized-schema bytes → arrow Schema. Producers differ: pyarrow ships
+ *  the full encapsulation (continuation marker + length + Message), arrow-rs
+ *  (FlightInfo.schema) ships the bare Message flatbuffer. Normalize both. */
 export function decodeSchemaBytes(bytes: Uint8Array): Schema {
+  let enc = bytes;
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (bytes.length < 8 || dv.getUint32(0, true) !== 0xffffffff) {
+    enc = encapsulate(bytes, new Uint8Array(0)); // bare Message → wrap it
+  }
   try {
-    return tableFromIPC(bytes).schema;
+    return tableFromIPC(enc).schema;
   } catch {
-    const withEos = new Uint8Array(bytes.length + EOS.length);
-    withEos.set(bytes, 0);
-    withEos.set(EOS, bytes.length);
+    const withEos = new Uint8Array(enc.length + EOS.length);
+    withEos.set(enc, 0);
+    withEos.set(EOS, enc.length);
     return tableFromIPC(withEos).schema;
   }
 }

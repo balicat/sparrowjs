@@ -244,6 +244,27 @@ test("transcode cross-vendor: roapi (Utf8View) values == duckdb (classic) values
   );
 });
 
+test("F6 (documented server gap): roapi empty results are field-less END TO END", async () => {
+  // Root-caused 2026-07-15: ROAPI/DataFusion sends a ZERO-FIELD schema for
+  // empty results in BOTH the DoGet stream and FlightInfo.schema (verified
+  // for WHERE 1=0, LIMIT 0, and runtime-empty predicates). The field names
+  // never cross the wire, so no client can heal it — sparrowJS now falls
+  // back to FlightInfo.schema when the stream schema is field-less, which
+  // fixes this on servers that populate FlightInfo properly. This test
+  // documents the roapi reality: graceful, honest, no crash.
+  const client = await connect({ endpoint: `${ORIGIN}/flight-roapi`, user: "demo", pass: "demo" });
+  const { table } = await client.query("SELECT value FROM series_data WHERE 1=0");
+  assert.equal(table.numRows, 0);
+  assert.equal(table.schema.fields.length, 0); // ← server-side gap, not ours
+});
+
+test("F6 heal: duckdb/gizmo empty results DO keep fields (the fallback's home turf)", async () => {
+  const client = await connect({ endpoint: `${ORIGIN}/flight-gizmo`, user: "demo", pass: "demo" });
+  const { table } = await client.query("SELECT 1 AS x WHERE 1=0");
+  assert.equal(table.numRows, 0);
+  assert.deepEqual(table.schema.fields.map((f) => f.name), ["x"]);
+});
+
 test("dialect: ROAPI (DataFusion) — connect tolerates missing GetSqlInfo", async () => {
   const client = await connect({ endpoint: `${ORIGIN}/flight-roapi`, user: "demo", pass: "demo" });
   const caps = client.capabilities(); // may be empty — that's the point

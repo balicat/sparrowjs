@@ -155,6 +155,14 @@ export class FlightClient {
       const info = await this.#fc.getFlightInfo(desc, this.#auth.callOptions(signal));
       marks.planMs = performance.now() - tP;
       marks.planDone();
+      if (info.schema?.length) {
+        try {
+          // heals field-less empty-stream schemas (DataFusion/ROAPI, F6)
+          marks.fallbackSchema = decodeSchemaBytes(info.schema);
+        } catch {
+          // stream schema remains the source of truth
+        }
+      }
       yield* this.#endpoints(info, marks, signal);
     }.bind(this);
     return new QueryStream(pump, opts, this.#mode);
