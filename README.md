@@ -83,6 +83,12 @@ any Apache Arrow Flight SQL server
 - **Decode** — `FlightData` frames are reassembled into an Arrow IPC stream
   (continuation marker + padded header + padded body + EOS) and handed to
   `apache-arrow`. Arrow columns are exposed as typed arrays after decode.
+- **View types** — Arrow JS can't decode `Utf8View`/`BinaryView` (the types
+  modern DataFusion servers emit for every parquet-sourced string column), so
+  sparrowJS **transcodes them to classic `Utf8`/`Binary` at the IPC layer**
+  before Arrow JS sees them. DataFusion/ROAPI servers work as-is — no
+  `schema_force_view_types` config, no asking the server's operator. To our
+  knowledge no other JS Flight client does this.
 - **Auth** — Basic bootstrap, then **Bearer adoption**: many Flight servers
   (GizmoSQL-style) mint a Bearer from your Basic credentials and bind the session to
   it, so the client adopts the token from the response headers — the same silent trick

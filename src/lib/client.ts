@@ -27,6 +27,7 @@ import { decodeSqlInfo, EMPTY_CAPABILITIES } from "./capabilities.js";
 import { encapsulate, EOS } from "./ipc.js";
 import { decodeSchemaBytes, quoteIdent, schemaBytesFor, tableInfosFrom } from "./metadata.js";
 import { Marks, QueryStream } from "./query-stream.js";
+import { viewTranscode } from "./view-transcode.js";
 import type {
   BigIntMode,
   Capabilities,
@@ -126,7 +127,9 @@ export class FlightClient {
   ): AsyncGenerator<AsyncGenerator<Uint8Array>> {
     for (const ep of info.endpoint) {
       if (!ep.ticket) continue;
-      yield this.#frames(ep.ticket, marks, signal);
+      // viewTranscode: Utf8View/BinaryView → classic (DataFusion servers);
+      // pure passthrough when the schema has no View columns
+      yield viewTranscode(this.#frames(ep.ticket, marks, signal));
     }
   }
 
@@ -221,7 +224,7 @@ export class FlightClient {
       await this.bootstrap();
       marks.authMs = performance.now() - tA;
       marks.planDone();
-      yield this.#frames(t, marks, signal);
+      yield viewTranscode(this.#frames(t, marks, signal));
     }.bind(this);
     return new QueryStream(pump, opts, this.#mode);
   }

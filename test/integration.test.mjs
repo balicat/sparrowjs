@@ -224,11 +224,23 @@ test("F2: cancel() before any consumption rejects the await", async () => {
   await assert.rejects(stream);
 });
 
-test("F5: ROAPI Utf8View decode error names the fix", async () => {
+test("F5→transcode: ROAPI Utf8View string columns now decode client-side", async () => {
   const client = await connect({ endpoint: `${ORIGIN}/flight-roapi`, user: "demo", pass: "demo" });
-  await assert.rejects(
-    client.query("SELECT series_id FROM series_data LIMIT 1"),
-    /schema_force_view_types=false/,
+  const { table } = await client.query("SELECT series_id FROM series_data LIMIT 5");
+  assert.equal(table.numRows, 5);
+  assert.equal(String(table.schema.fields[0].type), "Utf8");
+  const v = table.getChild("series_id").get(0);
+  assert.ok(typeof v === "string" && v.length > 0, `got ${v}`);
+});
+
+test("transcode cross-vendor: roapi (Utf8View) values == duckdb (classic) values", async () => {
+  const sql = "SELECT series_id FROM series_data ORDER BY series_id LIMIT 5";
+  const roapi = await connect({ endpoint: `${ORIGIN}/flight-roapi`, user: "demo", pass: "demo" });
+  const duck = await connect(SPARROW);
+  const [a, b] = await Promise.all([roapi.query(sql), duck.query(sql)]);
+  assert.deepEqual(
+    a.table.toArray().map((r) => r.series_id),
+    b.table.toArray().map((r) => r.series_id),
   );
 });
 

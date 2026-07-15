@@ -136,12 +136,21 @@ Conversion materializes the column (documented cost); `"bigint"` stays
 zero-copy. Applies to the convenience paths (`table`, `onBatch` batches);
 raw `doGet` is always untouched.
 
-## Known upstream constraint (documented, not solved)
+## View types (Utf8View/BinaryView) — transcoded client-side
 
-Arrow JS has no Utf8View/BinaryView decode — DataFusion-family servers
-(ROAPI) need `schema_force_view_types=false` server-side. `connect()` can't
-detect it preflight; the decode error is caught and re-thrown naming the
-type and the server-side fix (the raw upstream message is kept as `cause`).
+Arrow JS has no View-type decode (upstream gap), and DataFusion-family
+servers emit Utf8View for every parquet-sourced string column. sparrowJS
+**transcodes flat Utf8View/BinaryView columns to classic Utf8/Binary at the
+IPC layer, before Arrow JS sees them** (`view-transcode.ts`) — the same
+transformation `schema_force_view_types=false` performs server-side, done in
+the client so modern DataFusion servers work as-is, no server config, no
+asking the operator. Zero-cost passthrough when the schema has no View
+columns; strings are copied once (inherent — the classic layout requires it).
+
+Not covered (rare): View types nested inside List/Struct, dictionary-encoded
+View columns, compressed bodies carrying View columns, >2 GiB per column per
+batch. Those throw a decorated error naming the type and the server-side fix
+(the raw upstream message is kept as `cause`).
 
 ## Explicitly NOT in M1
 
