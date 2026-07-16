@@ -1,9 +1,24 @@
 {
   "name": "@sparrowjs/flight",
-  "version": "0.1.0-m1",
+  "version": "0.1.0",
   "description": "Arrow Flight. In the browser. Finally. — gRPC-web + Apache Arrow JS client for any Flight SQL server",
   "type": "module",
-  "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "arrow",
+    "apache-arrow",
+    "arrow-flight",
+    "flight-sql",
+    "grpc-web",
+    "browser",
+    "streaming",
+    "duckdb",
+    "datafusion",
+    "utf8view",
+    "columnar"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -24,6 +39,7 @@
     "test": "npm run build && node --test \"test/**/*.test.mjs\"",
     "test:unit": "npm run build && node --test \"test/unit/*.test.mjs\"",
     "test:browser": "npm run build && node test/browser/run.mjs",
+    "demo:bundle": "esbuild src/demo-entry.js --bundle --minify --format=iife --global-name=SparrowJS --target=es2020 --outfile=demo-dist/sparrow-demo.js",
     "m0": "node src/m0.mjs"
   },
   "dependencies": {

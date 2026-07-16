@@ -1,3 +1,5 @@
 node_modules/
 *.arrows
 dist/
+demo-dist/
+*.tgz

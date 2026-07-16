@@ -1,0 +1,41 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 5 * * *" # nightly: live integration + browser smoke
+  workflow_dispatch:
+
+jobs:
+  unit:
+    # fully offline: build + unit tests (incl. real captured roapi fixtures)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node --test "test/unit/*.test.mjs"
+      - name: pack sanity
+        run: npm pack --dry-run
+
+  live:
+    # hits the public demo endpoints — nightly / manual only, not PR-gating
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node --test "test/integration.test.mjs"
+      - name: browser smoke (system Chrome)
+        run: node test/browser/run.mjs
