@@ -24,6 +24,7 @@ export function createSparrowClient({ endpoint, user, pass }) {
       plan: Math.round(stats.planMs),
       firstBatch: Math.round(stats.firstBatchMs),
       total: Math.round(stats.totalMs),
+      route: stats.route,
     },
   });
   return {
