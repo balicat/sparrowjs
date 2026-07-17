@@ -1,4 +1,4 @@
-# sparrowjs — M1 API surface (draft for review)
+# sparrowJS (@sparrowflight/js) — M1 API surface (draft for review)
 
 *2026-07-15. React to this before any code. The constraint set: (1) the README
 already promises `for await (const batch of client.query(sql))` — that shape is
@@ -22,7 +22,7 @@ quirks) get designed in now, not bolted on.*
 ## The surface
 
 ```ts
-import { connect, FlightClient } from "sparrowjs";
+import { connect, FlightClient } from "@sparrowflight/js";
 
 // ── connect ──────────────────────────────────────────────────────────────
 const client: FlightClient = await connect({

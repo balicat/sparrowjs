@@ -1,10 +1,10 @@
-# sparrowjs
+# sparrowJS
 
 **The missing browser client for Apache Arrow Flight** — a browser implementation of
 Apache Arrow Flight and Flight SQL over gRPC-web. Works with any Apache Arrow Flight
 or Flight SQL server.
 
-> **Status** &nbsp; ✔ on npm: `npm install sparrowjs` &nbsp;·&nbsp; ✔ powers the [live demo at sparrowflight.io](https://sparrowflight.io/demo/js) &nbsp;·&nbsp; 0.x — API may still move
+> **Status** &nbsp; ✔ on npm: `npm install @sparrowflight/js` &nbsp;·&nbsp; ✔ powers the [live demo at sparrowflight.io](https://sparrowflight.io/demo/js) &nbsp;·&nbsp; 0.x — API may still move
 > **Supports** &nbsp; ✔ Flight &nbsp; ✔ Flight SQL &nbsp; ✔ browser &nbsp; ✔ Node (same transport) &nbsp; ✔ gRPC-web
 > **Validated against** &nbsp; ✔ Dremio OSS &nbsp; ✔ InfluxDB 3 Core &nbsp; ✔ GizmoSQL (DuckDB) &nbsp; ✔ Sparrow Flight
 
@@ -33,7 +33,7 @@ The same auth + discovery pattern is validated against **GizmoSQL (DuckDB)**,
 ## The API
 
 ```js
-import { connect } from "sparrowjs";
+import { connect } from "@sparrowflight/js";
 
 const client = await connect({
   endpoint: "/flight",
@@ -64,7 +64,7 @@ sparrowCLI's `--stats` prints. The live demo runs this exact library.
 ## Install
 
 ```sh
-npm install sparrowjs apache-arrow
+npm install @sparrowflight/js apache-arrow
 ```
 
 `apache-arrow` is a peer dependency (≥17) — your bundle shares one copy.
@@ -134,7 +134,7 @@ which browsers cannot speak. Verified July 2026:
 | `apache-arrow` (JS) | browser + Node | — (Arrow IPC decode only; no Flight transport) | — |
 | `gizmodata/gizmosql-client-js` | Node ≥ 20 | native gRPC (`@grpc/grpc-js`) | ✅ |
 | `lancedb/flight-sql-js-client` | Node (*"currently all testing is done on Node"*) | native gRPC | ✅ (experimental) |
-| **`sparrowjs`** | **browser-first** (proven in Node too) | **gRPC-web** | ✅ |
+| **`@sparrowflight/js`** | **browser-first** (proven in Node too) | **gRPC-web** | ✅ |
 
 In the browser, the standard answer is still a REST/JSON backend in front of Flight.
 sparrowJS implements the transport stack browsers lack — connect-web → gRPC-web →

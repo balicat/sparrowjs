@@ -1,5 +1,5 @@
 {
-  "name": "sparrowjs",
+  "name": "@sparrowflight/js",
   "version": "0.1.0",
   "description": "Arrow Flight. In the browser. Finally. — gRPC-web + Apache Arrow JS client for any Flight SQL server",
   "type": "module",
@@ -17,7 +17,8 @@
     "duckdb",
     "datafusion",
     "utf8view",
-    "columnar"
+    "columnar",
+    "sparrowjs"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
