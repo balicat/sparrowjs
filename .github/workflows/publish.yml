@@ -38,4 +38,15 @@ jobs:
             echo "package.json is $PKG but tag is $TAG" >&2
             exit 1
           fi
-      - run: npm publish
+      - name: skip if this version is already on the registry
+        id: check
+        run: |
+          PKG=$(node -p "require('./package.json').name")
+          VER=$(node -p "require('./package.json').version")
+          if npm view "$PKG@$VER" version >/dev/null 2>&1; then
+            echo "already published — no-op" && echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.check.outputs.skip != 'true'
+        run: npm publish
