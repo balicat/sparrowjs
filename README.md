@@ -118,7 +118,8 @@ conventional REST+JSON API, raced button-against-button
 
 | query | Arrow Flight | REST+JSON | winner |
 |---|---|---|---|
-| 1 series · 10,217 rows | 345 ms · 201 KB | **240 ms** · 56 KB gz | REST — one round trip beats Flight's two |
+| 1 series · 10,217 rows (2-RTT SQL) | 345 ms · 201 KB | **240 ms** · 56 KB gz | REST — one round trip beats Flight's two |
+| 1 series · same, via `pull()` (1-RTT ticket) | **143 ms** · 201 KB | 149 ms · 56 KB gz | dead heat — `pull()` removes the extra round trip (2026-07-17) |
 | 10 series · 71,979 rows | **588 ms** · 1.7 MB | 850 ms · 4.8 MB JSON | Arrow — the backend's JSON factory becomes the bottleneck |
 
 Small queries favour REST; the gap flips and grows with payload because the server

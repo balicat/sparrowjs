@@ -60,8 +60,26 @@ export interface Capabilities {
   substrait?: boolean;
   transactions?: number;
   cancel?: boolean;
+  /**
+   * Client-constructed ticket templates the server advertises for 1-RTT
+   * pulls (Sparrow vendor SqlInfo code 10100), or undefined if the server
+   * doesn't advertise them. An empty array means "advertises the extension
+   * but offers no templates". `pull()` uses this to fail fast.
+   */
+  directTickets?: TicketTemplate[];
   /** Every SqlInfo entry the server sent, by code. */
   raw: Map<number, unknown>;
+}
+
+/** One advertised direct-ticket template (see docs/api-m1.md · TICKETS.md). */
+export interface TicketTemplate {
+  /** template id, e.g. "series-pull" */
+  id: string;
+  doc?: string;
+  /** field → type hint, e.g. { series: "string[]", start: "string?" } */
+  ticket: Record<string, string>;
+  /** result columns as "name:type" strings */
+  result?: string[];
 }
 
 export interface TableInfo {

@@ -103,9 +103,17 @@ const stream = client
 
 // ── metadata (Tier 2, the CLI's hard-won logic) ──────────────────────────
 const caps = client.capabilities();       // sync — cached from bootstrap
-// { vendorName, vendorVersion, arrowVersion, readOnly, sql,
-//   substrait, transactions, cancel, raw: Map<number, unknown> }
+// { vendorName, vendorVersion, arrowVersion, readOnly, sql, substrait,
+//   transactions, cancel, directTickets?, raw: Map<number, unknown> }
 // fields a server didn't advertise are undefined — never a fabricated false
+
+// directTickets — the server's ADVERTISED 1-RTT ticket templates (Sparrow
+// vendor SqlInfo 10100), decoded at connect() from the auth-bootstrap call:
+//   [{ id: "series-pull", ticket: { series: "string[]", start: "string?",
+//      end: "string?" }, result: ["series_id:utf8", …] }]
+// undefined = server doesn't advertise (pull() attempts optimistically);
+// present-but-no-series-pull = pull() throws BEFORE the network. Self-
+// describing fast path: the client learns which pulls are 1-RTT at connect().
 
 const tabs = await client.tables();       // GetTables RPC (portable path)
 // [{ catalog, dbSchema, name, type }]    // includes MACRO rows (search_meta)
@@ -130,7 +138,8 @@ const { table, stats } = await client.pull(["PET.RWTC.D"], {
 // the sorted-snapshot pruned read. Measured on the public server, same
 // 10,217-row series, warm medians: pull 143 ms · query 224 ms · REST+JSON
 // 149 ms — Flight at REST's latency floor, with Arrow's payload. Throws on
-// servers that mint opaque handles (GizmoSQL, DataFusion) — query() there.
+// servers that mint opaque handles (GizmoSQL, DataFusion) — query() there;
+// with capabilities().directTickets it throws BEFORE the network (0.3.0).
 ```
 
 ## §bigint

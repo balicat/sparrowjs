@@ -2,7 +2,7 @@
 // The result table is (info_name: uint32, value: dense union); Arrow JS
 // resolves union children on .get(), so values arrive unwrapped.
 import type { Table } from "apache-arrow";
-import type { Capabilities } from "./types.js";
+import type { Capabilities, TicketTemplate } from "./types.js";
 
 // Flight SQL standard SqlInfo codes (the ones worth first-classing)
 const SERVER_NAME = 0;
@@ -13,6 +13,23 @@ const SERVER_SQL = 4;
 const SERVER_SUBSTRAIT = 5;
 const SERVER_TRANSACTION = 8;
 const SERVER_CANCEL = 9;
+// Sparrow vendor extension: JSON contract of client-constructed ticket
+// templates for 1-RTT pulls (see TICKETS.md).
+const SPARROW_DIRECT_TICKETS = 10100;
+
+function decodeDirectTickets(v: unknown): TicketTemplate[] | undefined {
+  if (typeof v !== "string" || !v) return undefined;
+  try {
+    const parsed = JSON.parse(v) as { templates?: unknown };
+    const templates = parsed?.templates;
+    if (!Array.isArray(templates)) return [];
+    return templates
+      .filter((t): t is TicketTemplate => !!t && typeof (t as TicketTemplate).id === "string")
+      .map((t) => ({ id: t.id, doc: t.doc, ticket: t.ticket ?? {}, result: t.result }));
+  } catch {
+    return undefined; // malformed advertisement — treat as "not advertised"
+  }
+}
 
 function asBool(v: unknown): boolean | undefined {
   if (typeof v === "boolean") return v;
@@ -55,6 +72,7 @@ export function decodeSqlInfo(table: Table): Capabilities {
     substrait: asBool(raw.get(SERVER_SUBSTRAIT)),
     transactions: asNum(raw.get(SERVER_TRANSACTION)),
     cancel: asBool(raw.get(SERVER_CANCEL)),
+    directTickets: decodeDirectTickets(raw.get(SPARROW_DIRECT_TICKETS)),
     raw,
   };
 }

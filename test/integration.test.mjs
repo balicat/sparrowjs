@@ -175,6 +175,16 @@ test("early break then await → partial table, no hang", async () => {
   assert.ok(table.numRows <= 10000);
 });
 
+test("capabilities().directTickets: server advertises the series-pull template", async () => {
+  const client = await connect(SPARROW);
+  const adv = client.capabilities().directTickets;
+  assert.ok(Array.isArray(adv), "directTickets decoded from SqlInfo 10100");
+  const sp = adv.find((t) => t.id === "series-pull");
+  assert.ok(sp, "series-pull advertised");
+  assert.equal(sp.ticket.series, "string[]");
+  assert.ok(sp.result?.includes("value:float64"));
+});
+
 test("pull(): 1-RTT ticket path returns the same rows as the SQL path", async () => {
   const client = await connect(SPARROW);
   const [p, q] = await Promise.all([

@@ -228,6 +228,18 @@ export class FlightClient {
    * (GizmoSQL/DataFusion mint opaque handles) — use query() there.
    */
   pull(series: string[], opts: { start?: string; end?: string } & QueryOptions = {}): QueryStream {
+    // fail fast when the server ADVERTISES its ticket templates (SqlInfo
+    // 10100) and series-pull isn't among them — no wasted round trip. A
+    // server that doesn't advertise (undefined) is tried optimistically:
+    // it may still accept tickets (older Sparrow nodes did before 10100).
+    const adv = this.#caps.directTickets;
+    if (adv && !adv.some((t) => t.id === "series-pull")) {
+      const ids = adv.map((t) => t.id).join(", ") || "none";
+      throw new Error(
+        `pull(): ${this.#caps.vendorName ?? "this server"} advertises direct-ticket templates ` +
+          `[${ids}] but not "series-pull" — use query() instead`,
+      );
+    }
     const { start, end, ...qopts } = opts;
     const ticket: Record<string, unknown> = { series };
     if (start) ticket.start = start;
