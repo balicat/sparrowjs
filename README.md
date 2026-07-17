@@ -1,10 +1,10 @@
-# @sparrowjs/flight
+# sparrowjs
 
 **The missing browser client for Apache Arrow Flight** — a browser implementation of
 Apache Arrow Flight and Flight SQL over gRPC-web. Works with any Apache Arrow Flight
 or Flight SQL server.
 
-> **Status** &nbsp; ✔ powers the [live demo at sparrowflight.io](https://sparrowflight.io/demo/js) &nbsp;·&nbsp; ⚠ API not yet stable, not yet on npm
+> **Status** &nbsp; ✔ on npm: `npm install sparrowjs` &nbsp;·&nbsp; ✔ powers the [live demo at sparrowflight.io](https://sparrowflight.io/demo/js) &nbsp;·&nbsp; 0.x — API may still move
 > **Supports** &nbsp; ✔ Flight &nbsp; ✔ Flight SQL &nbsp; ✔ browser &nbsp; ✔ Node (same transport) &nbsp; ✔ gRPC-web
 > **Validated against** &nbsp; ✔ Dremio OSS &nbsp; ✔ InfluxDB 3 Core &nbsp; ✔ GizmoSQL (DuckDB) &nbsp; ✔ Sparrow Flight
 
@@ -33,7 +33,7 @@ The same auth + discovery pattern is validated against **GizmoSQL (DuckDB)**,
 ## The API
 
 ```js
-import { connect } from "@sparrowjs/flight";
+import { connect } from "sparrowjs";
 
 const client = await connect({
   endpoint: "/flight",
@@ -59,14 +59,22 @@ await client.query(sql, { bigIntMode: "string" }); // int64 without 2^53 surpris
 Full surface + design rationale: [docs/api-m1.md](docs/api-m1.md). `connect()` fails
 fast on a bad endpoint or credentials, adopts the Bearer, and seeds `capabilities()`
 in the same round trip. Every result carries wire stats — the same anatomy
-sparrowCLI's `--stats` prints. (The live demo still runs the pre-library factory,
-`src/demo-entry.js`; it migrates to the library at npm-publish time.)
+sparrowCLI's `--stats` prints. The live demo runs this exact library.
+
+## Install
+
+```sh
+npm install sparrowjs apache-arrow
+```
+
+`apache-arrow` is a peer dependency (≥17) — your bundle shares one copy.
+The library is 44 kB gzipped, ESM, tree-shakeable, TypeScript types included.
 
 ## How it works
 
 ```
 your browser
-    │  sparrowJS (@sparrowjs/flight)
+    │  sparrowjs
     │  gRPC-web
     ▼
 Envoy grpc_web filter          ← config, not code
@@ -126,7 +134,7 @@ which browsers cannot speak. Verified July 2026:
 | `apache-arrow` (JS) | browser + Node | — (Arrow IPC decode only; no Flight transport) | — |
 | `gizmodata/gizmosql-client-js` | Node ≥ 20 | native gRPC (`@grpc/grpc-js`) | ✅ |
 | `lancedb/flight-sql-js-client` | Node (*"currently all testing is done on Node"*) | native gRPC | ✅ (experimental) |
-| **`@sparrowjs/flight`** | **browser-first** (proven in Node too) | **gRPC-web** | ✅ |
+| **`sparrowjs`** | **browser-first** (proven in Node too) | **gRPC-web** | ✅ |
 
 In the browser, the standard answer is still a REST/JSON backend in front of Flight.
 sparrowJS implements the transport stack browsers lack — connect-web → gRPC-web →

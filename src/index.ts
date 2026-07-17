@@ -1,4 +1,4 @@
-// @sparrowjs/flight — Arrow Flight (SQL) in the browser over gRPC-web.
+// sparrowjs — Arrow Flight (SQL) in the browser over gRPC-web.
 export { connect, FlightClient } from "./lib/client.js";
 export type { DescriptorInit, TicketInit } from "./lib/client.js";
 export { QueryStream } from "./lib/query-stream.js";

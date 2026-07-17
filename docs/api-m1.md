@@ -1,4 +1,4 @@
-# @sparrowjs/flight — M1 API surface (draft for review)
+# sparrowjs — M1 API surface (draft for review)
 
 *2026-07-15. React to this before any code. The constraint set: (1) the README
 already promises `for await (const batch of client.query(sql))` — that shape is
@@ -22,7 +22,7 @@ quirks) get designed in now, not bolted on.*
 ## The surface
 
 ```ts
-import { connect, FlightClient } from "@sparrowjs/flight";
+import { connect, FlightClient } from "sparrowjs";
 
 // ── connect ──────────────────────────────────────────────────────────────
 const client: FlightClient = await connect({
@@ -175,6 +175,6 @@ batch. Those throw a decorated error naming the type and the server-side fix
    opt into convenience. Alternative: `"number"` default matches what JS
    devs expect but silently caps at 2^53 unless we throw (we would throw).
    *Recommend `"bigint"` default + loud `"number"`.*
-5. **Package layout**: single entry `@sparrowjs/flight` (~everything above,
+5. **Package layout**: single entry `sparrowjs` (~everything above,
    tree-shakeable ESM) vs a `/raw` subpath for the escape hatches.
    *Recommend single entry for M1 — subpaths when the bundle budget bites.*

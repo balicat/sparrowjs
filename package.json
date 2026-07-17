@@ -1,5 +1,5 @@
 {
-  "name": "@sparrowjs/flight",
+  "name": "sparrowjs",
   "version": "0.1.0",
   "description": "Arrow Flight. In the browser. Finally. — gRPC-web + Apache Arrow JS client for any Flight SQL server",
   "type": "module",

@@ -1,4 +1,4 @@
-// Public types for @sparrowjs/flight.
+// Public types for sparrowjs.
 import type { RecordBatch, Schema, Table } from "apache-arrow";
 
 /** How int64/uint64 columns reach JavaScript. See docs/api-m1.md §bigint. */

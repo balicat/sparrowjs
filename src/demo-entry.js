@@ -1,7 +1,7 @@
 // sparrowJS demo bundle — a thin adapter over the library.
 // The demo page (sparrowflight.io/demo/js) predates the library and expects
 // the M0 factory shape ({ table, rows, cols, bytes, batches, timing }); this
-// keeps that surface while ALL the real work happens in @sparrowjs/flight —
+// keeps that surface while ALL the real work happens in sparrowjs —
 // so the live demo now exercises the shipped code: single-flight bootstrap,
 // streaming decode, the View-type transcoder, the FlightInfo schema fallback.
 //
