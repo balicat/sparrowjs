@@ -175,6 +175,25 @@ test("early break then await → partial table, no hang", async () => {
   assert.ok(table.numRows <= 10000);
 });
 
+test("pull(): 1-RTT ticket path returns the same rows as the SQL path", async () => {
+  const client = await connect(SPARROW);
+  const [p, q] = await Promise.all([
+    client.pull(["PET.RWTC.D"]),
+    client.query(
+      "SELECT series_id, period, value FROM series_data WHERE series_id='PET.RWTC.D' ORDER BY series_id, period",
+    ),
+  ]);
+  assert.equal(p.table.numRows, q.table.numRows);
+  assert.ok(p.table.numRows > 10000);
+  assert.equal(p.stats.planMs, 0, "no GetFlightInfo on the pull path");
+});
+
+test("pull() start/end filter narrows the window", async () => {
+  const client = await connect(SPARROW);
+  const { table } = await client.pull(["PET.RWTC.D"], { start: "2024-01-01", end: "2024-12-31" });
+  assert.ok(table.numRows > 100 && table.numRows < 400, `got ${table.numRows}`);
+});
+
 test("query error surfaces (bad SQL rejects)", async () => {
   const client = await connect(SPARROW);
   await assert.rejects(client.query("SELECT FROM nothing sensible"));

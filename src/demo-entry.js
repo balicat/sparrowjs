@@ -13,22 +13,27 @@ export function createSparrowClient({ endpoint, user, pass }) {
   const client = new FlightClient({ endpoint, user, pass });
   // the demo wants a synchronous factory: skip eager connect() and let the
   // first query trigger the (single-flighted) bootstrap, as M0 did
+  const shape = ({ table, stats }) => ({
+    table,
+    rows: table.numRows,
+    cols: table.schema.fields.map((f) => f.name),
+    bytes: stats.wireBytes,
+    batches: stats.batches,
+    timing: {
+      auth: Math.round(stats.authMs),
+      plan: Math.round(stats.planMs),
+      firstBatch: Math.round(stats.firstBatchMs),
+      total: Math.round(stats.totalMs),
+    },
+  });
   return {
     async query(sql, opts = {}) {
-      const { table, stats } = await client.query(sql, { onBatch: opts.onBatch });
-      return {
-        table,
-        rows: table.numRows,
-        cols: table.schema.fields.map((f) => f.name),
-        bytes: stats.wireBytes,
-        batches: stats.batches,
-        timing: {
-          auth: Math.round(stats.authMs),
-          plan: Math.round(stats.planMs),
-          firstBatch: Math.round(stats.firstBatchMs),
-          total: Math.round(stats.totalMs),
-        },
-      };
+      return shape(await client.query(sql, { onBatch: opts.onBatch }));
+    },
+    // 1-RTT ticket pull (servers that accept JSON tickets — the Sparrow
+    // serving node does; GizmoSQL/DataFusion don't)
+    async pull(series, opts = {}) {
+      return shape(await client.pull(series, opts));
     },
   };
 }

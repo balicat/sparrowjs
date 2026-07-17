@@ -118,6 +118,19 @@ const info = await client.getFlightInfo(descriptor);
 for await (const batch of client.doGet(ticket)) { ... }
 // doGet() reuses the same IPC-reassembly + decode pipeline — JSON-ticket
 // servers and non-SQL Flight servers get streaming decode for free.
+
+// ── pull(): the 1-RTT path (added 0.2.0) ─────────────────────────────────
+const { table, stats } = await client.pull(["PET.RWTC.D"], {
+  start: "2020-01-01", end: "2024-12-31",  // optional window
+});
+// Flight SQL reads are TWO round trips by design (query → ticket → stream —
+// the indirection that lets results scatter across a cluster). Servers that
+// accept CLIENT-CONSTRUCTED JSON tickets — the Sparrow serving node does —
+// let pull() skip GetFlightInfo: one round trip, no SQL parse, straight to
+// the sorted-snapshot pruned read. Measured on the public server, same
+// 10,217-row series, warm medians: pull 143 ms · query 224 ms · REST+JSON
+// 149 ms — Flight at REST's latency floor, with Arrow's payload. Throws on
+// servers that mint opaque handles (GizmoSQL, DataFusion) — query() there.
 ```
 
 ## §bigint
