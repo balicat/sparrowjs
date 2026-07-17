@@ -1,0 +1,41 @@
+name: publish
+
+# npm TRUSTED PUBLISHING (OIDC): no tokens, no OTP. npmjs.com is configured
+# to trust THIS workflow file in THIS repo; GitHub mints a short-lived OIDC
+# token per run and npm accepts the publish + generates provenance
+# attestations automatically. Release recipe:
+#   npm version patch   (bumps package.json + creates the tag)
+#   git push && git push --tags
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write # REQUIRED for OIDC trusted publishing
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # OIDC publish needs npm >= 11.5.1
+      - run: npm install -g npm@latest
+      - run: npm ci
+      - run: npm run build
+      - name: unit tests (offline, incl. real captured fixtures)
+        run: node --test "test/unit/*.test.mjs"
+      - name: tag must match package.json version
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$PKG" != "$TAG" ]; then
+            echo "package.json is $PKG but tag is $TAG" >&2
+            exit 1
+          fi
+      - run: npm publish
