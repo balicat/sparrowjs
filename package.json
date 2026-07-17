@@ -1,6 +1,6 @@
 {
   "name": "@sparrowflight/js",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Arrow Flight. In the browser. Finally. — gRPC-web + Apache Arrow JS client for any Flight SQL server",
   "type": "module",
   "publishConfig": {
