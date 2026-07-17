@@ -142,6 +142,28 @@ export class FlightClient {
     yield EOS;
   }
 
+  /** The 2-RTT wire work shared by #commandStream and query()'s planned
+   *  branch: GetFlightInfo → per-endpoint DoGet. Assumes bootstrap done. */
+  async *#plannedPump(
+    desc: FlightDescriptor,
+    marks: Marks,
+    signal: AbortSignal,
+  ): AsyncGenerator<AsyncGenerator<Uint8Array>> {
+    const tP = performance.now();
+    const info = await this.#fc.getFlightInfo(desc, this.#auth.callOptions(signal));
+    marks.planMs = performance.now() - tP;
+    marks.planDone();
+    if (info.schema?.length) {
+      try {
+        // heals field-less empty-stream schemas (DataFusion/ROAPI, F6)
+        marks.fallbackSchema = decodeSchemaBytes(info.schema);
+      } catch {
+        // stream schema remains the source of truth
+      }
+    }
+    yield* this.#endpoints(info, marks, signal);
+  }
+
   #commandStream(desc: FlightDescriptor, opts: QueryOptions = {}): QueryStream {
     const pump = async function* (
       this: FlightClient,
@@ -151,31 +173,48 @@ export class FlightClient {
       const tA = performance.now();
       await this.bootstrap();
       marks.authMs = performance.now() - tA;
-      const tP = performance.now();
-      const info = await this.#fc.getFlightInfo(desc, this.#auth.callOptions(signal));
-      marks.planMs = performance.now() - tP;
-      marks.planDone();
-      if (info.schema?.length) {
-        try {
-          // heals field-less empty-stream schemas (DataFusion/ROAPI, F6)
-          marks.fallbackSchema = decodeSchemaBytes(info.schema);
-        } catch {
-          // stream schema remains the source of truth
-        }
-      }
-      yield* this.#endpoints(info, marks, signal);
+      yield* this.#plannedPump(desc, marks, signal);
     }.bind(this);
     return new QueryStream(pump, opts, this.#mode);
   }
 
   // ── the everyday path ──────────────────────────────────────────────────
 
-  /** Flight SQL statement → QueryStream (async-iterate it, or await it). */
+  /**
+   * Flight SQL statement → QueryStream (async-iterate it, or await it).
+   *
+   * Where the server advertises the "sql" direct-ticket template (SqlInfo
+   * 10100 — Sparrow serving nodes), the whole query rides the ticket
+   * straight to DoGet: 1 RTT instead of 2, no behavior change (schema
+   * arrives with the first batch either way, errors surface on the stream).
+   * `stats.route` reports which path ran; `{ direct: false }` forces the
+   * planned 2-RTT path.
+   */
   query(sql: string, opts?: QueryOptions): QueryStream {
-    return this.#commandStream(
-      descFor(CommandStatementQuerySchema, create(CommandStatementQuerySchema, { query: sql })),
-      opts,
-    );
+    const pump = async function* (
+      this: FlightClient,
+      marks: Marks,
+      signal: AbortSignal,
+    ): AsyncGenerator<AsyncGenerator<Uint8Array>> {
+      const tA = performance.now();
+      await this.bootstrap();
+      marks.authMs = performance.now() - tA;
+      if (opts?.direct !== false && this.#caps.directTickets?.some((t) => t.id === "sql")) {
+        marks.route = "direct";
+        marks.planDone();
+        const ticket = create(TicketSchema, {
+          ticket: new TextEncoder().encode(JSON.stringify({ sql })),
+        });
+        yield viewTranscode(this.#frames(ticket, marks, signal));
+        return;
+      }
+      yield* this.#plannedPump(
+        descFor(CommandStatementQuerySchema, create(CommandStatementQuerySchema, { query: sql })),
+        marks,
+        signal,
+      );
+    }.bind(this);
+    return new QueryStream(pump, opts, this.#mode);
   }
 
   /** Typed query builder: from("t").select(...).where(...).limit(n).query() */
@@ -259,6 +298,7 @@ export class FlightClient {
       const tA = performance.now();
       await this.bootstrap();
       marks.authMs = performance.now() - tA;
+      marks.route = "direct";
       marks.planDone();
       yield viewTranscode(this.#frames(t, marks, signal));
     }.bind(this);

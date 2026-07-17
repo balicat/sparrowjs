@@ -28,6 +28,9 @@ export class Marks {
   rows = 0;
   batches = 0;
   wireBytes = 0;
+  /** which wire path served this stream — pumps that skip GetFlightInfo
+   *  (pull, doGet, auto-routed query) set "direct" */
+  route: "direct" | "planned" = "planned";
 
   planDone(): void {
     this.tPlanDone = performance.now();
@@ -48,6 +51,7 @@ export class Marks {
     return {
       authMs: r(this.authMs),
       planMs: r(this.planMs),
+      route: this.route,
       firstBatchMs: this.tFirstBatch ? r(this.tFirstBatch - (this.tPlanDone || this.t0)) : 0,
       streamMs: r(streamMs),
       totalMs: r(totalMs),

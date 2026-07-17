@@ -140,6 +140,18 @@ const { table, stats } = await client.pull(["PET.RWTC.D"], {
 // 149 ms — Flight at REST's latency floor, with Arrow's payload. Throws on
 // servers that mint opaque handles (GizmoSQL, DataFusion) — query() there;
 // with capabilities().directTickets it throws BEFORE the network (0.3.0).
+
+// ── query() auto-routing via the "sql" template (added 0.4.0) ────────────
+// Where directTickets advertises { id: "sql", ticket: { sql: "string" } },
+// query() puts the WHOLE STATEMENT in the ticket and goes straight to
+// DoGet — arbitrary SQL at 1 RTT, zero code changes. Semantics are
+// unchanged: schema still arrives with the first batch (QueryStream never
+// needed it earlier), SQL errors surface on the stream instead of at
+// planning. stats.route reports "direct" | "planned"; force the planned
+// path with { direct: false }. Servers that don't advertise the template
+// (GizmoSQL, ROAPI, Dremio, older Sparrow) keep the 2-RTT path untouched —
+// the routing decision is per-server truth from SqlInfo 10100, never a
+// guess.
 ```
 
 ## §bigint

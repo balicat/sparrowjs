@@ -23,6 +23,12 @@ export interface QueryOptions {
   onBatch?: (batch: RecordBatch, index: number, msSinceStart: number) => void;
   /** Override the client-level bigIntMode for this query. */
   bigIntMode?: BigIntMode;
+  /**
+   * Set false to force the planned 2-RTT path (GetFlightInfo → DoGet) even
+   * when the server advertises the "sql" direct-ticket template. Default:
+   * query() auto-routes 1-RTT where the template is advertised.
+   */
+  direct?: boolean;
 }
 
 /** sparrowCLI --stats, minus the terminal. */
@@ -31,6 +37,9 @@ export interface QueryStats {
   authMs: number;
   /** GetFlightInfo round trip. */
   planMs: number;
+  /** "direct" = 1-RTT ticket straight to DoGet (pull(), doGet(), or query()
+   *  auto-routed via the advertised "sql" template); "planned" = 2-RTT. */
+  route: "direct" | "planned";
   /** Plan done → first decoded batch. */
   firstBatchMs: number;
   /** First batch → last batch. */

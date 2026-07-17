@@ -39,11 +39,14 @@ test("style B — await → { table, stats }", async () => {
   const { table, stats } = await client.query("SELECT range AS n FROM range(50)");
   assert.equal(table.numRows, 50);
   assert.equal(stats.rows, 50);
-  assert.ok(stats.planMs > 0, "planMs measured");
+  // 0.4.0: query() auto-routes 1-RTT where the server advertises the "sql"
+  // template — planMs is then legitimately 0 (no GetFlightInfo at all)
+  if (stats.route === "planned") assert.ok(stats.planMs > 0, "planMs measured");
+  else assert.equal(stats.planMs, 0, "direct route has no plan RPC");
   assert.ok(stats.wireBytes > 0, "wireBytes counted");
   assert.ok(stats.totalMs >= stats.streamMs);
   console.log(
-    `    stats: plan ${stats.planMs} ms · first batch ${stats.firstBatchMs} ms · total ${stats.totalMs} ms · ${stats.wireBytes} B`,
+    `    stats: route ${stats.route} · plan ${stats.planMs} ms · first batch ${stats.firstBatchMs} ms · total ${stats.totalMs} ms · ${stats.wireBytes} B`,
   );
 });
 
@@ -204,9 +207,28 @@ test("pull() start/end filter narrows the window", async () => {
   assert.ok(table.numRows > 100 && table.numRows < 400, `got ${table.numRows}`);
 });
 
-test("query error surfaces (bad SQL rejects)", async () => {
+test('sql template advertised → query() auto-routes 1-RTT; { direct: false } opts out', async () => {
+  const client = await connect(SPARROW);
+  const sqlT = client.capabilities().directTickets?.find((t) => t.id === "sql");
+  assert.ok(sqlT, 'sql template advertised (SqlInfo 10100)');
+  const sql =
+    "SELECT series_id, period, value FROM series_data WHERE series_id='PET.RWTC.D' ORDER BY series_id, period";
+  const direct = await client.query(sql);
+  assert.equal(direct.stats.route, "direct");
+  assert.equal(direct.stats.planMs, 0, "no GetFlightInfo when auto-routed");
+  const planned = await client.query(sql, { direct: false });
+  assert.equal(planned.stats.route, "planned");
+  assert.ok(planned.stats.planMs > 0, "forced 2-RTT pays the plan RPC");
+  assert.equal(direct.table.numRows, planned.table.numRows, "same rows on both routes");
+  console.log(
+    `    route timings: direct ${direct.stats.totalMs} ms · planned ${planned.stats.totalMs} ms (plan ${planned.stats.planMs} ms)`,
+  );
+});
+
+test("query error surfaces on both routes (stream error direct, plan error 2-RTT)", async () => {
   const client = await connect(SPARROW);
   await assert.rejects(client.query("SELECT FROM nothing sensible"));
+  await assert.rejects(client.query("SELECT FROM nothing sensible", { direct: false }));
 });
 
 test("connect() fails fast on bad credentials", async () => {

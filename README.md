@@ -62,6 +62,12 @@ await client.query(sql, { bigIntMode: "string" }); // int64 without 2^53 surpris
 // skip GetFlightInfo entirely: measured 143 ms vs 224 ms for the same
 // 10,217-row series over the same wire. Flight at REST's latency floor.
 await client.pull(["PET.RWTC.D"], { start: "2020-01-01" });
+
+// …and query() takes the same shortcut BY ITSELF where the server
+// advertises the "sql" direct-ticket template (SqlInfo 10100): the whole
+// statement rides the ticket, arbitrary SQL at 1 RTT. stats.route tells
+// you which path ran; { direct: false } forces the planned 2-RTT path.
+const { stats } = await client.query("SELECT …");  // stats.route → "direct"
 ```
 
 Full surface + design rationale: [docs/api-m1.md](docs/api-m1.md). `connect()` fails
@@ -120,6 +126,7 @@ conventional REST+JSON API, raced button-against-button
 |---|---|---|---|
 | 1 series · 10,217 rows (2-RTT SQL) | 345 ms · 201 KB | **240 ms** · 56 KB gz | REST — one round trip beats Flight's two |
 | 1 series · same, via `pull()` (1-RTT ticket) | **143 ms** · 201 KB | 149 ms · 56 KB gz | dead heat — `pull()` removes the extra round trip (2026-07-17) |
+| 1 series · same, `query()` auto-routed (1-RTT `sql` ticket) | **137 ms** · 201 KB | 149 ms · 56 KB gz | arbitrary SQL at the same floor — no code change (0.4.0) |
 | 10 series · 71,979 rows | **588 ms** · 1.7 MB | 850 ms · 4.8 MB JSON | Arrow — the backend's JSON factory becomes the bottleneck |
 
 Small queries favour REST; the gap flips and grows with payload because the server
