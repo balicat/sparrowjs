@@ -1,5 +1,8 @@
 # sparrowJS
 
+[![npm](https://img.shields.io/npm/v/%40sparrowflight%2Fjs)](https://www.npmjs.com/package/@sparrowflight/js)
+[![tests](https://github.com/balicat/sparrowjs/actions/workflows/test.yml/badge.svg)](https://github.com/balicat/sparrowjs/actions/workflows/test.yml)
+
 **The missing browser client for Apache Arrow Flight** — a browser implementation of
 Apache Arrow Flight and Flight SQL over gRPC-web. Works with any Apache Arrow Flight
 or Flight SQL server.
