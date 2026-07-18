@@ -4,9 +4,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { tableFromIPC } from "apache-arrow";
+import { tableFromIPC, Type } from "apache-arrow";
 import { viewTranscode } from "../../dist/lib/view-transcode.js";
 import { splitFixture } from "../fixtures/split.mjs";
+
+// apache-arrow ≥21.2 decodes Utf8View natively, so the transcoder steps aside
+// and the column keeps its native View type; on <21.2 the transcoder rewrites
+// it to classic Utf8. Either way the STRING VALUES must be correct — that's
+// the invariant. The type just reflects which path ran.
+const STR = typeof Type.Utf8View === "number" ? "Utf8View" : "Utf8";
 
 async function transcodeFixture(name) {
   const bytes = new Uint8Array(readFileSync(new URL(`../fixtures/${name}`, import.meta.url)));
@@ -29,7 +35,7 @@ async function transcodeFixture(name) {
 test("real roapi Utf8View column decodes to classic Utf8 with correct values", async () => {
   const t = await transcodeFixture("roapi-utf8view.bin");
   assert.equal(t.numRows, 5);
-  assert.equal(String(t.schema.fields[0].type), "Utf8");
+  assert.equal(String(t.schema.fields[0].type), STR);
   const values = t.toArray().map((r) => r.series_id);
   // long strings (>12 bytes) exercise the variadic-buffer path
   assert.ok(values.includes("BH.Canada.Directional.Current"), values.join(","));
@@ -40,7 +46,7 @@ test("mixed Utf8View + Float64 batch: layout walk preserves the non-view column"
   const t = await transcodeFixture("roapi-utf8view-mixed.bin");
   assert.equal(t.numRows, 300);
   const names = t.schema.fields.map((f) => `${f.name}:${f.type}`);
-  assert.deepEqual(names, ["series_id:Utf8", "value:Float64"]);
+  assert.deepEqual(names, [`series_id:${STR}`, "value:Float64"]);
   const rows = t.toArray();
   assert.ok(rows.every((r) => typeof r.series_id === "string"));
   assert.ok(rows.every((r) => typeof r.value === "number" && Number.isFinite(r.value)));

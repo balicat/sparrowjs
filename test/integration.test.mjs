@@ -2,7 +2,12 @@
 // public demo endpoints. Override with SPARROW_ENDPOINT/SPARROW_USER/SPARROW_PASS.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { Type } from "apache-arrow";
 import { connect } from "../dist/index.js";
+
+// ≥21.2 decodes Utf8View natively (transcoder self-disables → native View
+// type); <21.2 gets the transcoder's classic Utf8. Values are correct either way.
+const STR = typeof Type.Utf8View === "number" ? "Utf8View" : "Utf8";
 
 const ORIGIN = process.env.SPARROW_ORIGIN ?? "https://sparrowflight.io";
 const SPARROW = {
@@ -279,7 +284,7 @@ test("F5→transcode: ROAPI Utf8View string columns now decode client-side", asy
   const client = await connect({ endpoint: `${ORIGIN}/flight-roapi`, user: "demo", pass: "demo" });
   const { table } = await client.query("SELECT series_id FROM series_data LIMIT 5");
   assert.equal(table.numRows, 5);
-  assert.equal(String(table.schema.fields[0].type), "Utf8");
+  assert.equal(String(table.schema.fields[0].type), STR);
   const v = table.getChild("series_id").get(0);
   assert.ok(typeof v === "string" && v.length > 0, `got ${v}`);
 });

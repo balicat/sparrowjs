@@ -24,6 +24,7 @@ import {
 import { AuthState } from "./auth.js";
 import { QueryBuilder } from "./builder.js";
 import { decodeSqlInfo, EMPTY_CAPABILITIES } from "./capabilities.js";
+import { acceptedCompression, registerCompressionCodecs } from "./compression.js";
 import { encapsulate, EOS } from "./ipc.js";
 import { decodeSchemaBytes, quoteIdent, schemaBytesFor, tableInfosFrom } from "./metadata.js";
 import { Marks, QueryStream } from "./query-stream.js";
@@ -74,6 +75,9 @@ export class FlightClient {
   #bootstrap: Promise<void> | undefined;
 
   constructor(opts: ConnectOptions) {
+    // Register the LZ4 decompressor so compressed IPC streams decode
+    // (no-op on apache-arrow < 21.2). Idempotent, cheap, "just works".
+    registerCompressionCodecs();
     const transport = createGrpcWebTransport({ baseUrl: opts.endpoint });
     this.#fc = createClient(FlightService, transport);
     this.#auth = new AuthState({
@@ -202,8 +206,11 @@ export class FlightClient {
       if (opts?.direct !== false && this.#caps.directTickets?.some((t) => t.id === "sql")) {
         marks.route = "direct";
         marks.planDone();
+        const body: Record<string, unknown> = { sql };
+        const accept = acceptedCompression();
+        if (accept.length) body.accept_compression = accept;
         const ticket = create(TicketSchema, {
-          ticket: new TextEncoder().encode(JSON.stringify({ sql })),
+          ticket: new TextEncoder().encode(JSON.stringify(body)),
         });
         yield viewTranscode(this.#frames(ticket, marks, signal));
         return;
@@ -283,6 +290,8 @@ export class FlightClient {
     const ticket: Record<string, unknown> = { series };
     if (start) ticket.start = start;
     if (end) ticket.end = end;
+    const accept = acceptedCompression();
+    if (accept.length) ticket.accept_compression = accept;
     return this.doGet(new TextEncoder().encode(JSON.stringify(ticket)), qopts);
   }
 
