@@ -49,7 +49,11 @@ export interface QueryStats {
   batches: number;
   /** FlightData frames as received (header + body, re-encapsulated). */
   wireBytes: number;
+  /** Rows over the TRANSFER window (first→last batch) — first-byte latency is
+   *  not a rate. Single-batch results fall back to the DoGet window (latency
+   *  and transfer are indistinguishable for one batch). */
   rowsPerSec: number;
+  /** Wire bits over the same transfer window as rowsPerSec. */
   mbitPerSec: number;
 }
 

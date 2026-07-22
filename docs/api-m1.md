@@ -81,9 +81,9 @@ interface QueryStats {
   rows: number;
   batches: number;
   wireBytes: number;              // FlightData frames as received
-  rowsPerSec: number;
-  mbitPerSec: number;
-}
+  rowsPerSec: number;             // over the TRANSFER window (first→last batch),
+  mbitPerSec: number;             // not totalMs — first-byte latency is not a rate;
+}                                 // single-batch falls back to the DoGet window
 // Every dashboard gets its "83,490 rows in 86 ms" line for free.
 
 // ── typed query builder (the thing a CLI can't be) ───────────────────────

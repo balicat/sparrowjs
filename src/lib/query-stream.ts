@@ -47,6 +47,12 @@ export class Marks {
     const totalMs = end - this.t0;
     const streamMs = this.tFirstBatch ? this.tLastBatch - this.tFirstBatch : 0;
     const streamWindow = Math.max(1, end - (this.tPlanDone || this.t0));
+    // Throughput over the TRANSFER window (first batch → last batch), so
+    // first-byte latency is not folded into a rate (tester finding J1). A
+    // single-batch result has no observable transfer window — fall back to
+    // the DoGet window and accept latency in the denominator, which is
+    // indistinguishable from transfer for one batch.
+    const transferMs = streamMs >= 1 ? streamMs : streamWindow;
     const r = (n: number) => Math.round(n * 10) / 10;
     return {
       authMs: r(this.authMs),
@@ -58,8 +64,8 @@ export class Marks {
       rows: this.rows,
       batches: this.batches,
       wireBytes: this.wireBytes,
-      rowsPerSec: totalMs > 0 ? Math.round(this.rows / (totalMs / 1000)) : 0,
-      mbitPerSec: r((this.wireBytes * 8) / 1000 / streamWindow),
+      rowsPerSec: Math.round(this.rows / (transferMs / 1000)),
+      mbitPerSec: r((this.wireBytes * 8) / 1000 / transferMs),
     };
   }
 }
