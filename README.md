@@ -111,6 +111,16 @@ any Apache Arrow Flight SQL server
   before Arrow JS sees them. DataFusion/ROAPI servers work as-is — no
   `schema_force_view_types` config, no asking the server's operator. To our
   knowledge no other JS Flight client does this.
+- **Compression (0.5.0)** — the browser reads **lz4-compressed Arrow IPC**:
+  sparrowJS registers an [lz4js](https://www.npmjs.com/package/lz4js) codec on
+  apache-arrow 21.2's `compressionRegistry` (the decode hook from arrow-js
+  PR #14) and every 1-RTT ticket declares `accept_compression: ["lz4"]` — the
+  server compresses **only** for a client that said it can decode. Negotiated
+  end to end and feature-detected: on apache-arrow < 21.2 the codec isn't
+  registered, the ticket stays silent, and the server ships plain IPC that any
+  Arrow can read. Nothing to configure, no version fence (the peer range stays
+  `>=17`). Measured on the demo's 10,217-row pull: **201 KB → 130 KB on the
+  wire (1.6×)**; string-heavy pulls compress ~2–3.3×.
 - **Auth** — Basic bootstrap, then **Bearer adoption**: many Flight servers
   (GizmoSQL-style) mint a Bearer from your Basic credentials and bind the session to
   it, so the client adopts the token from the response headers — the same silent trick
@@ -128,6 +138,10 @@ conventional REST+JSON API, raced button-against-button
 | 1 series · same, via `pull()` (1-RTT ticket) | **143 ms** · 201 KB | 149 ms · 56 KB gz | dead heat — `pull()` removes the extra round trip (2026-07-17) |
 | 1 series · same, `query()` auto-routed (1-RTT `sql` ticket) | **137 ms** · 201 KB | 149 ms · 56 KB gz | arbitrary SQL at the same floor — no code change (0.4.0) |
 | 10 series · 71,979 rows | **588 ms** · 1.7 MB | 850 ms · 4.8 MB JSON | Arrow — the backend's JSON factory becomes the bottleneck |
+
+(Wire sizes in the table are pre-0.5.0 captures. With negotiated lz4 the same
+1-RTT pulls now ship **130 KB instead of 201 KB** — REST's gzip edge on the
+wire is mostly gone, at the same timing floor.)
 
 Small queries favour REST; the gap flips and grows with payload because the server
 stops spending CPU manufacturing JSON. Under load the difference is structural —

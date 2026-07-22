@@ -186,6 +186,19 @@ View columns, compressed bodies carrying View columns, >2 GiB per column per
 batch. Those throw a decorated error naming the type and the server-side fix
 (the raw upstream message is kept as `cause`).
 
+## Compression (0.5.0)
+
+`registerCompressionCodecs()` — idempotent; registers an lz4js codec for
+`LZ4_FRAME` on apache-arrow's `compressionRegistry` when the installed Arrow
+has one (≥ 21.2), no-op otherwise. Called automatically from the
+`FlightClient` constructor, and exported for callers constructing Arrow
+readers directly. The negotiation is per-ticket: 1-RTT Sparrow tickets carry
+`accept_compression` listing only codecs actually registered (empty on old
+Arrow → the server serves plain IPC). Decode-only by design — the server
+compresses, the browser reads. `stats.wireBytes` shows the compressed wire.
+Note lz4js decodes LZ4 **Frame** (what pyarrow/DuckDB emit); lz4-wasm does
+raw blocks only and won't work as a replacement codec.
+
 ## Explicitly NOT in M1
 
 - **M2**: error taxonomy (typed `FlightError` with layer + grpc code —
